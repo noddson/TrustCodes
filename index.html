@@ -6,16 +6,71 @@
   <meta name="theme-color" content="#f5f1e8">
   <meta name="description" content="Client-only mutual and one-way trust codes for out-of-band conversations.">
   <title>Trust Codes — check it’s really them</title>
-  <link rel="stylesheet" href="styles.css?v=13">
-  <script type="module" src="app.js?v=14"></script>
+  <link rel="stylesheet" href="styles.css?v=14">
+  <script type="module" src="app.js?v=15"></script>
 </head>
 <body>
+  <section id="simple-mode" class="simple-mode" aria-label="Simple trust code view" hidden>
+    <header class="simple-header">
+      <div class="simple-brand" aria-label="Trust Codes">
+        <svg class="brand-mark" viewBox="0 0 44 44" aria-hidden="true"><path class="shield" d="M22 3.5 36.5 9v11.3c0 9.7-5.8 16.3-14.5 20.2C13.3 36.6 7.5 30 7.5 20.3V9L22 3.5Z"/><path class="check" d="m15 22 4.5 4.5 9.5-10"/></svg>
+        <span>Trust Codes</span>
+      </div>
+      <div class="simple-mode-pill"><i aria-hidden="true"></i>Simple mode</div>
+      <button id="simple-mode-exit" class="simple-exit" type="button">Exit simple mode</button>
+    </header>
+
+    <main class="simple-main">
+      <button id="simple-photo-button" class="simple-photo-button" type="button" aria-label="Add a photo">
+        <span class="simple-photo-frame"><img id="simple-photo" alt="" hidden><span id="simple-photo-initials" class="simple-photo-initials" aria-hidden="true">?</span></span>
+        <span class="simple-camera-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M4 8.5h3l1.5-2h7l1.5 2h3v10H4v-10Z"/><circle cx="12" cy="13.5" r="3.2"/></svg>
+        </span>
+      </button>
+      <h1 id="simple-person-name" class="simple-person-name">Private channel</h1>
+      <p id="simple-prompt" class="simple-prompt">Read this code aloud and compare it together</p>
+
+      <section id="simple-generate-card" class="simple-code-card">
+        <div id="simple-generated-code" class="simple-generated-code" aria-live="polite">••• •••</div>
+        <div id="simple-totp-timer" class="simple-timer-row">
+          <svg class="simple-timer-ring" viewBox="0 0 36 36" aria-hidden="true">
+            <circle class="simple-timer-track" cx="18" cy="18" r="14"/>
+            <circle id="simple-timer-progress" class="simple-timer-progress" cx="18" cy="18" r="14"/>
+          </svg>
+          <span>New code in <strong id="simple-timer-text">30 seconds</strong></span>
+        </div>
+        <small id="simple-remaining" class="simple-remaining" hidden></small>
+        <button id="simple-next-code" class="simple-action-button" type="button" hidden>Conversation confirmed — show next code</button>
+        <button id="simple-consume-proof" class="simple-action-button" type="button" hidden>They accepted — use the next phrase</button>
+      </section>
+
+      <section id="simple-verify-card" class="simple-code-card simple-verify-card" hidden>
+        <label for="simple-verify-code">Enter the phrase they read aloud</label>
+        <textarea id="simple-verify-code" rows="3" spellcheck="false" autocomplete="off"></textarea>
+        <button id="simple-verify-button" class="simple-primary-button" type="button">Check phrase</button>
+        <div id="simple-verify-result" class="simple-verify-result" role="status" aria-live="polite" hidden></div>
+        <small id="simple-verify-remaining" class="simple-remaining"></small>
+      </section>
+    </main>
+
+    <nav class="simple-people" aria-label="Other trust codes">
+      <div class="simple-people-title">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm8-1a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM2.5 19c.4-3.1 2.2-4.8 5.5-4.8s5.1 1.7 5.5 4.8M13 14.5c.7-.4 1.6-.6 2.8-.6 3.2 0 5 1.8 5.4 5.1"/></svg>
+        Check a code with someone else
+      </div>
+      <div id="simple-people-list" class="simple-people-list"></div>
+    </nav>
+  </section>
+
   <header class="site-header">
     <a class="brand" href="#" aria-label="Trust Codes home">
       <svg class="brand-mark" viewBox="0 0 44 44" aria-hidden="true"><path class="shield" d="M22 3.5 36.5 9v11.3c0 9.7-5.8 16.3-14.5 20.2C13.3 36.6 7.5 30 7.5 20.3V9L22 3.5Z"/><path class="check" d="m15 22 4.5 4.5 9.5-10"/></svg>
       <span>Trust Codes</span>
     </a>
-    <div class="privacy-pill"><i></i><span>Cryptography runs on this device</span></div>
+    <div class="header-actions">
+      <button id="simple-mode-enter" class="simple-mode-enter" type="button" disabled>Simple mode</button>
+      <div class="privacy-pill"><i></i><span>Cryptography runs on this device</span></div>
+    </div>
   </header>
 
   <main>
@@ -160,6 +215,26 @@
       <label class="field"><span>Confirm context</span><input id="context-confirm" type="password" maxlength="96" autocomplete="off" required><small>The context is held only in memory and is not placed in the setup code.</small></label>
       <div id="context-confirm-error" class="notice error" role="alert" hidden></div>
       <div class="button-row"><button id="context-confirm-cancel" class="secondary-button" type="button">Cancel</button><button id="context-confirm-submit" class="primary-button" type="submit">Confirm and create</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="photo-dialog" class="vault-dialog photo-dialog">
+    <form method="dialog">
+      <h2>Add a photo</h2>
+      <div class="photo-choice-list">
+        <button id="take-photo" class="photo-choice primary-button" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5h3l1.5-2h7l1.5 2h3v10H4v-10Z"/><circle cx="12" cy="13.5" r="3.2"/></svg>
+          Take a photo
+        </button>
+        <button id="choose-photo" class="photo-choice secondary-button" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="17" height="16" rx="2"/><circle cx="9" cy="9" r="1.5"/><path d="m5.5 17 4.3-4.5 3.2 3 2.3-2.2 3.2 3.7"/></svg>
+          Choose a photo
+        </button>
+        <button id="remove-photo" class="text-button danger" type="button" hidden>Remove current photo</button>
+      </div>
+      <button id="photo-cancel" class="text-button" type="button">Cancel</button>
+      <input id="camera-photo-input" class="sr-only" type="file" accept="image/*" capture="environment">
+      <input id="library-photo-input" class="sr-only" type="file" accept="image/*">
     </form>
   </dialog>
 

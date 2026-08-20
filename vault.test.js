@@ -7,10 +7,11 @@ const salt = new Uint8Array(16).fill(7);
 const iv = new Uint8Array(12).fill(9);
 
 test("the vault encrypts and authenticates serialized entries", async () => {
-  const entries = [{ id: "one", scheme: "mutual", secret: "not-plaintext-storage", persisted: true }];
+  const entries = [{ id: "one", scheme: "mutual", secret: "not-plaintext-storage", photo: "data:image/jpeg;base64,private-photo", persisted: true }];
   const key = await deriveVaultKey("a long test passphrase", salt, 1_000);
   const record = await encryptVaultEntries(entries, key, iv);
   assert.equal(record.ciphertext.includes("not-plaintext-storage"), false);
+  assert.equal(record.ciphertext.includes("private-photo"), false);
   assert.deepEqual(await decryptVaultEntries(record, key), entries);
 });
 

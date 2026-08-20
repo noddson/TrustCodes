@@ -14,6 +14,7 @@ import { drawQrCode } from "./qr.js";
 import { cameraErrorMessage, normalizeScannedSetupCode, QrCameraScanner } from "./qr-scanner.js";
 import { createVault, saveVault, unlockVault, vaultExists } from "./vault.js";
 import { loadBuildVersion } from "./build-version.js";
+import { initialsForName, photoDataUrl, readSimpleModePreference, writeSimpleModePreference } from "./simple-mode.js";
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -38,6 +39,15 @@ const el = {
   vaultPassphrase: $("#vault-passphrase"), vaultConfirmField: $("#vault-confirm-field"), vaultConfirm: $("#vault-confirm"), vaultSubmit: $("#vault-submit"), vaultError: $("#vault-error"),
   contextConfirmDialog: $("#context-confirm-dialog"), contextConfirmForm: $("#context-confirm-form"), contextConfirm: $("#context-confirm"),
   contextConfirmSubmit: $("#context-confirm-submit"), contextConfirmError: $("#context-confirm-error"),
+  simpleMode: $("#simple-mode"), simpleEnter: $("#simple-mode-enter"), simpleExit: $("#simple-mode-exit"),
+  simplePhotoButton: $("#simple-photo-button"), simplePhoto: $("#simple-photo"), simplePhotoInitials: $("#simple-photo-initials"),
+  simpleName: $("#simple-person-name"), simplePrompt: $("#simple-prompt"), simplePeopleList: $("#simple-people-list"),
+  simpleGenerateCard: $("#simple-generate-card"), simpleGenerated: $("#simple-generated-code"), simpleTimer: $("#simple-totp-timer"),
+  simpleTimerProgress: $("#simple-timer-progress"), simpleTimerText: $("#simple-timer-text"), simpleRemaining: $("#simple-remaining"),
+  simpleNext: $("#simple-next-code"), simpleConsume: $("#simple-consume-proof"), simpleVerifyCard: $("#simple-verify-card"),
+  simpleVerifyInput: $("#simple-verify-code"), simpleVerifyButton: $("#simple-verify-button"), simpleVerifyResult: $("#simple-verify-result"), simpleVerifyRemaining: $("#simple-verify-remaining"),
+  photoDialog: $("#photo-dialog"), takePhoto: $("#take-photo"), choosePhoto: $("#choose-photo"), removePhoto: $("#remove-photo"),
+  cameraPhotoInput: $("#camera-photo-input"), libraryPhotoInput: $("#library-photo-input"),
 };
 
 let entries = [];
@@ -53,6 +63,8 @@ let toastTimer;
 let contextTimer;
 let cameraScanner = null;
 let pendingCreateConfig = null;
+let simpleModeRequested = readSimpleModePreference();
+let simpleRenderedId = null;
 
 function active() { return entries.find((entry) => entry.id === activeId) || entries[0] || null; }
 function selected(name) { return $(`input[name="${name}"]:checked`).value; }
@@ -293,6 +305,91 @@ function formatLabel(entry) {
   return `${entry.length} ${entry.format === "numeric" ? "digits" : "characters"}`;
 }
 
+function setContactPhoto(image, initials, entry) {
+  const hasPhoto = Boolean(entry?.photo);
+  image.hidden = !hasPhoto;
+  if (hasPhoto) image.src = entry.photo;
+  else image.removeAttribute("src");
+  image.alt = hasPhoto ? `Photo for ${entry.name}` : "";
+  initials.hidden = hasPhoto;
+  initials.textContent = initialsForName(entry?.name);
+}
+
+function renderSimplePeople(entry) {
+  el.simplePeopleList.replaceChildren(...entries.map((item) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "simple-person";
+    button.setAttribute("aria-pressed", String(item.id === entry.id));
+    button.setAttribute("aria-label", `${item.name}${item.id === entry.id ? ", selected" : ""}`);
+
+    const portrait = document.createElement("span");
+    portrait.className = "simple-person-photo";
+    const image = document.createElement("img");
+    const initials = document.createElement("span");
+    initials.className = "simple-person-initials";
+    initials.setAttribute("aria-hidden", "true");
+    setContactPhoto(image, initials, item);
+    portrait.append(image, initials);
+
+    const copy = document.createElement("span");
+    const label = document.createElement("strong");
+    label.textContent = item.name;
+    const status = document.createElement("small");
+    status.textContent = item.id === entry.id ? "Selected" : "Tap to view";
+    copy.append(label, status);
+    button.append(portrait, copy);
+    button.addEventListener("click", () => {
+      if (item.id === activeId) return;
+      clearActiveContext();
+      activeId = item.id;
+      renderWorkspace();
+    });
+    return button;
+  }));
+}
+
+function renderSimpleWorkspace(entry = active()) {
+  const available = Boolean(entry);
+  el.simpleEnter.disabled = !available;
+  el.simpleEnter.title = available ? "Show only the current trust code" : "Create or unlock a trust channel first";
+  const visible = simpleModeRequested && available;
+  el.simpleMode.hidden = !visible;
+  document.body.classList.toggle("simple-mode-active", visible);
+  if (!visible) return;
+
+  if (simpleRenderedId !== entry.id) {
+    simpleRenderedId = entry.id;
+    el.simpleVerifyInput.value = "";
+    el.simpleVerifyResult.hidden = true;
+  }
+
+  setContactPhoto(el.simplePhoto, el.simplePhotoInitials, entry);
+  el.simplePhotoButton.setAttribute("aria-label", `${entry.photo ? "Change" : "Add"} photo for ${entry.name}`);
+  el.simpleName.textContent = entry.name;
+  const canGenerate = entry.scheme === "mutual" || entry.role === "prove";
+  el.simpleGenerateCard.hidden = !canGenerate;
+  el.simpleVerifyCard.hidden = canGenerate;
+  el.simpleTimer.hidden = entry.scheme !== "mutual" || entry.method !== "totp";
+  el.simpleNext.hidden = entry.scheme !== "mutual" || entry.method !== "hotp";
+  el.simpleConsume.hidden = entry.scheme !== "proof" || entry.role !== "prove";
+  el.simpleRemaining.hidden = entry.scheme !== "proof";
+
+  if (entry.scheme === "mutual") {
+    el.simplePrompt.textContent = "Read this code aloud and compare it together";
+  } else if (entry.role === "prove") {
+    el.simplePrompt.textContent = `Read this phrase aloud to ${entry.name}`;
+    el.simpleRemaining.textContent = `${entry.remaining} phrases remaining`;
+    el.simpleConsume.disabled = entry.remaining < 1;
+  } else {
+    el.simplePrompt.textContent = `Ask ${entry.name} to read their phrase aloud`;
+    el.simpleVerifyInput.placeholder = `${entry.length}-word phrase…`;
+    el.simpleVerifyRemaining.textContent = `${entry.remaining} phrases remaining`;
+    el.simpleVerifyButton.disabled = entry.remaining < 1;
+  }
+  renderSimplePeople(entry);
+}
+
 async function renderGenerated(force = false) {
   const entry = active();
   if (!entry || (entry.scheme === "proof" && entry.role !== "prove")) return;
@@ -304,12 +401,14 @@ async function renderGenerated(force = false) {
   if (active()?.id !== entry.id || contextFor() !== context) return;
   el.generated.textContent = formatForDisplay(code, entry.scheme === "proof" ? "words" : entry.format);
   el.generated.classList.toggle("word-code", entry.scheme === "proof" || entry.format === "words");
+  el.simpleGenerated.textContent = el.generated.textContent;
+  el.simpleGenerated.classList.toggle("word-code", entry.scheme === "proof" || entry.format === "words");
 }
 
 function renderWorkspace() {
   const entry = active();
   el.empty.hidden = Boolean(entry); el.workspace.hidden = !entry;
-  if (!entry) { updateVaultUI(); return; }
+  if (!entry) { updateVaultUI(); renderSimpleWorkspace(null); return; }
   activeId = entry.id;
   el.select.innerHTML = entries.map((item) => `<option value="${item.id}"${item.id === entry.id ? " selected" : ""}>${escapeHtml(item.name)} — ${item.scheme === "mutual" ? item.method.toUpperCase() : item.role === "prove" ? "I prove" : "I verify"}</option>`).join("");
   el.schemeBadge.textContent = entry.scheme === "mutual" ? "Mutual comparison" : entry.role === "prove" ? "One-way · I prove" : "One-way · I verify";
@@ -339,7 +438,11 @@ function renderWorkspace() {
   el.verifyInput.value = ""; el.result.hidden = true;
   lastCounter = -1;
   if (canGenerate && (entry.scheme !== "proof" || entry.remaining > 0)) renderGenerated(true);
-  else el.generated.textContent = "Chain complete";
+  else {
+    el.generated.textContent = "Chain complete";
+    el.simpleGenerated.textContent = "Chain complete";
+  }
+  renderSimpleWorkspace(entry);
   updateVaultUI();
 }
 
@@ -351,6 +454,9 @@ async function tick() {
   el.timerText.textContent = `${remaining}s`;
   el.timerFill.style.width = `${(entry.period - elapsed) / entry.period * 100}%`;
   el.timerFill.style.background = remaining <= 5 ? "#cf624e" : "";
+  el.simpleTimerText.textContent = `${remaining} second${remaining === 1 ? "" : "s"}`;
+  el.simpleTimerProgress.style.strokeDashoffset = String(88 * (1 - (entry.period - elapsed) / entry.period));
+  el.simpleTimerProgress.classList.toggle("is-ending", remaining <= 5);
   await renderGenerated();
 }
 
@@ -404,12 +510,61 @@ async function renderBuildVersion() {
   versionElement.replaceChildren(label, link);
 }
 
+async function applySelectedPhoto(input) {
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file) return;
+  const entry = active();
+  if (!entry) return;
+  try {
+    el.simplePhotoButton.disabled = true;
+    entry.photo = await photoDataUrl(file);
+    await savePersisted();
+    renderWorkspace();
+    showToast("Photo added on this device");
+  } catch (error) { showToast(error.message); }
+  finally { el.simplePhotoButton.disabled = false; }
+}
+
 $$('[data-tab]').forEach((button) => button.addEventListener("click", () => switchTab(button.dataset.tab)));
 $$('[data-go-setup]').forEach((button) => button.addEventListener("click", () => { resetSetupViews(); switchTab("setup"); }));
 $$('input[name="scheme"]').forEach((radio) => radio.addEventListener("change", updateScheme));
 el.format.addEventListener("change", updateStrengthOptions);
 el.length.addEventListener("change", updateStrengthOptions);
 el.proofWords.addEventListener("change", updateProofStrengthDetails);
+el.simpleEnter.addEventListener("click", () => {
+  if (!active()) return showToast("Create or unlock a trust channel first");
+  simpleModeRequested = true;
+  writeSimpleModePreference(true);
+  switchTab("use");
+  el.simpleExit.focus();
+});
+el.simpleExit.addEventListener("click", () => {
+  simpleModeRequested = false;
+  writeSimpleModePreference(false);
+  renderSimpleWorkspace();
+  requestAnimationFrame(() => el.simpleEnter.focus());
+});
+el.simplePhotoButton.addEventListener("click", () => {
+  const entry = active();
+  if (!entry) return;
+  el.removePhoto.hidden = !entry.photo;
+  el.photoDialog.showModal();
+});
+el.takePhoto.addEventListener("click", () => { el.photoDialog.close(); el.cameraPhotoInput.click(); });
+el.choosePhoto.addEventListener("click", () => { el.photoDialog.close(); el.libraryPhotoInput.click(); });
+el.cameraPhotoInput.addEventListener("change", () => applySelectedPhoto(el.cameraPhotoInput));
+el.libraryPhotoInput.addEventListener("change", () => applySelectedPhoto(el.libraryPhotoInput));
+$("#photo-cancel").addEventListener("click", () => el.photoDialog.close());
+el.removePhoto.addEventListener("click", async () => {
+  const entry = active();
+  if (!entry?.photo) return;
+  delete entry.photo;
+  el.photoDialog.close();
+  await savePersisted();
+  renderWorkspace();
+  showToast("Photo removed from this device");
+});
 
 async function createConfiguredChannel(config) {
   const button = $("#create-channel");
@@ -524,8 +679,14 @@ $("#copy-code").addEventListener("click", () => {
 el.next.addEventListener("click", async () => {
   const entry = active(); entry.counter += 1; await savePersisted(); renderWorkspace(); showToast("Counter advanced on this device");
 });
+el.simpleNext.addEventListener("click", async () => {
+  const entry = active(); entry.counter += 1; await savePersisted(); renderWorkspace(); showToast("Next code shown");
+});
 el.consume.addEventListener("click", async () => {
   const entry = active(); consumeProof(entry); await savePersisted(); renderWorkspace(); showToast("Proof consumed—do not reuse the previous phrase");
+});
+el.simpleConsume.addEventListener("click", async () => {
+  const entry = active(); consumeProof(entry); await savePersisted(); renderWorkspace(); showToast("Next phrase shown");
 });
 el.verifyInput.addEventListener("input", () => { el.result.hidden = true; });
 el.verifyButton.addEventListener("click", async () => {
@@ -541,6 +702,29 @@ el.verifyButton.addEventListener("click", async () => {
     } else verificationResult(false, "Invalid proof. Stop and reconnect through a contact method you trust.");
   } catch (error) { verificationResult(false, error.message); }
   finally { el.verifyButton.disabled = entry.remaining < 1; }
+});
+el.simpleVerifyInput.addEventListener("input", () => { el.simpleVerifyResult.hidden = true; });
+el.simpleVerifyButton.addEventListener("click", async () => {
+  const entry = active();
+  if (!entry || entry.scheme !== "proof" || entry.role !== "verify") return;
+  el.simpleVerifyButton.disabled = true;
+  try {
+    const result = await verifyProofPhrase(el.simpleVerifyInput.value, entry, contextFor());
+    el.simpleVerifyResult.hidden = false;
+    el.simpleVerifyResult.className = `simple-verify-result ${result.valid ? "success" : "failure"}`;
+    if (result.valid) {
+      await savePersisted();
+      el.simpleVerifyInput.value = "";
+      el.simpleVerifyResult.textContent = result.exhausted ? "Correct. This was the final phrase." : "Correct. This phrase cannot be used again.";
+      el.simpleVerifyRemaining.textContent = `${entry.remaining} phrases remaining`;
+    } else {
+      el.simpleVerifyResult.textContent = "That phrase does not match. Stop and contact them another way.";
+    }
+  } catch (error) {
+    el.simpleVerifyResult.hidden = false;
+    el.simpleVerifyResult.className = "simple-verify-result failure";
+    el.simpleVerifyResult.textContent = error.message;
+  } finally { el.simpleVerifyButton.disabled = entry.remaining < 1; }
 });
 
 $("#forget-channel").addEventListener("click", async () => {

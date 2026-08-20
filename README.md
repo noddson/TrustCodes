@@ -14,6 +14,10 @@ Then open [http://localhost:4173](http://localhost:4173).
 
 All application code still runs in the browser. The local server only delivers the static HTML, CSS, and JavaScript files. Use the same URL and port each time because browser storage is scoped to its origin.
 
+## Simple mode
+
+Once a channel is available, **Simple mode** replaces the normal workspace with one large active code or proof phrase, the person's name and photo, and a visual list of the other available channels. The mode preference is stored in local browser storage for that origin. Press the camera icon on the active photo to take or choose a picture; saved-channel photos are resized locally and stored inside the encrypted vault entry.
+
 `npm start` generates `version.json` before serving the app. Its displayed version is `YYYY.MM.<7-character Git commit>`, with `.d` appended when tracked files differ from `HEAD`. The footer links a valid generated version to that exact commit. CI or deployment builds can use `GITHUB_SHA` or `COMMIT_SHA`; `version.json` is a generated artifact and is not committed.
 
 ## Important security and liability limitations
