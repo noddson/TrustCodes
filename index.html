@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#f5f1e8">
   <meta name="description" content="Client-only mutual and one-way trust codes for out-of-band conversations.">
   <title>Trust Codes — check it’s really them</title>
-  <link rel="stylesheet" href="styles.css?v=12">
-  <script type="module" src="app.js?v=12"></script>
+  <link rel="stylesheet" href="styles.css?v=13">
+  <script type="module" src="app.js?v=14"></script>
 </head>
 <body>
   <header class="site-header">
@@ -47,7 +47,7 @@
 
           <div class="form-grid">
             <label class="field"><span>Channel name</span><input id="channel-name" type="text" maxlength="48" placeholder="e.g. Wife — mutual TOTP" autocomplete="off"><small>A shared label. It does not affect the cryptography.</small></label>
-            <label class="field"><span>Context password <em>optional</em></span><input id="channel-context" type="password" maxlength="96" placeholder="Leave empty for no context" autocomplete="new-password"><small>Used once to wrap this channel’s cryptographic material. It is not saved or placed in the setup code; tell the other person separately.</small></label>
+            <label class="field"><span>Context <em>optional</em></span><input id="channel-context" type="password" maxlength="96" placeholder="Leave empty for no context" autocomplete="new-password"><small>Used once to wrap this channel’s cryptographic material. It is not saved or placed in the setup code; tell the other person separately.</small></label>
 
             <fieldset class="wide-field"><legend>Trust model</legend><div class="segmented">
               <label><input type="radio" name="scheme" value="mutual" checked><span><strong>Mutual codes</strong><small>Both devices show the same code</small></span></label>
@@ -78,7 +78,7 @@
         </div>
 
         <div id="import-view" hidden>
-          <div class="panel-heading"><div><p class="step-label">Join a channel</p><h2>Import their setup code</h2><p>The setup code includes its trust model and your device’s role, but never the context password.</p></div></div>
+          <div class="panel-heading"><div><p class="step-label">Join a channel</p><h2>Import their setup code</h2><p>The setup code includes its trust model and your device’s role, but never the context.</p></div></div>
           <label class="field full-field"><span>Setup code</span><textarea id="import-code" rows="4" spellcheck="false" placeholder="TC1-…"></textarea><small>It contains independently salted, context-wrapped secret material—not the context itself. Learn the context separately from the creator.</small></label>
           <div class="camera-scan-prompt"><div><strong>Scan from another device</strong><small>The camera remains off until you enable it. Frames stay on this device and are never saved.</small></div><button id="start-scanner" class="secondary-button" type="button">Enable camera scanner</button></div>
           <div id="scanner-view" class="scanner-view" hidden>
@@ -94,7 +94,7 @@
           <div class="success-icon" aria-hidden="true">✓</div>
           <div><p class="step-label">Channel ready</p><h3>Share this setup code once</h3><p id="share-instruction"></p></div>
           <div class="secret-box"><code id="setup-code"></code><div class="secret-actions"><button id="copy-setup" class="icon-button" type="button" aria-label="Copy setup code">Copy</button><button id="show-setup-qr" class="icon-button" type="button">Show QR</button></div></div>
-          <div id="setup-qr-panel" class="setup-qr-panel" hidden><canvas id="setup-qr" role="img" aria-label="QR code containing the setup code"></canvas><div><strong>Scan once on the other device</strong><p>This QR contains the same sensitive setup code shown above. It never contains the context password.</p><button id="hide-setup-qr" class="text-button" type="button">Hide QR code</button></div></div>
+          <div id="setup-qr-panel" class="setup-qr-panel" hidden><canvas id="setup-qr" role="img" aria-label="QR code containing the setup code"></canvas><div><strong>Scan once on the other device</strong><p>This QR contains the same sensitive setup code shown above. It never contains the context.</p><button id="hide-setup-qr" class="text-button" type="button">Hide QR code</button></div></div>
           <div class="button-row share-actions"><button id="cancel-share" class="secondary-button" type="button">Start over</button><button id="finish-setup" class="primary-button" type="button">Continue to trust codes</button></div>
         </div>
         <div id="setup-error" class="notice error" role="alert" hidden></div>
@@ -108,7 +108,7 @@
             <div class="channel-actions"><span id="scheme-badge" class="direction-badge"></span><span id="method-badge" class="method-badge"></span><button id="forget-channel" class="text-button danger" type="button">Forget</button></div>
           </div>
           <div class="context-control">
-            <label class="field"><span>Context password <em>optional</em></span><input id="use-context" type="password" maxlength="96" autocomplete="off" placeholder="Leave empty for the base code"><small>Type the same value on both devices to bind the current code or proof to that context. It is held only in memory and is never saved or exported.</small></label>
+            <label class="field"><span>Context <em>optional</em></span><input id="use-context" type="password" maxlength="96" autocomplete="off" placeholder="Leave empty for the base code"><small>Type the same value on both devices to bind the current code or proof to that context. It is held only in memory and is never saved or exported.</small></label>
             <div><span id="context-status">No context applied</span><button id="clear-context" class="text-button" type="button">Clear context</button></div>
           </div>
 
@@ -132,12 +132,12 @@
         <div class="explain-grid">
           <article><span>↔</span><h3>Mutual HOTP/TOTP</h3><p>Both devices share one secret and display the same code. Neither side has a privileged role.</p></article>
           <article><span>→</span><h3>One-way proof</h3><p>The prover holds a seed. The verifier stores only a hash anchor and cannot calculate the next configurable 4–8 word phrase.</p></article>
-          <article><span>✦</span><h3>Optional context password</h3><p>The creator can bind setup material to a context and then discard it. Both people re-enter it while using the TrustCode; it is never stored or exported.</p></article>
+          <article><span>✦</span><h3>Optional context</h3><p>The creator can bind setup material to a context and then discard it. Both people re-enter it while using the TrustCode; it is never stored or exported.</p></article>
         </div>
         <div class="learn-details">
           <details open><summary>What does the encrypted vault protect?</summary><p>Saved entries are encrypted with AES-256-GCM. The key is derived from your passphrase with PBKDF2-HMAC-SHA256 and a random salt. This protects closed or locked data at rest. While unlocked, the page’s JavaScript can use the key and decrypted secrets; a compromised page, extension, browser profile, or device could expose them. Browser data may also be cleared, so retain setup backups.</p></details>
           <details><summary>How does a one-way proof work?</summary><p>The verifier hashes the supplied phrase once and compares it with the stored anchor. After success, that phrase becomes the next anchor. Calculating the following phrase would require reversing SHA-256.</p></details>
-          <details><summary>How is the context password handled?</summary><p>At creation, PBKDF2-HMAC-SHA256 uses the context and an independent random salt for each device to wrap its secret, seed, or anchor. The creator’s input is then cleared. Setup codes and the encrypted vault retain only the salt and wrapped material. Both people re-enter the context while using the TrustCode. Even if both omit it or enter the same wrong value, their independently salted material does not match. Leaving context empty at creation preserves normal context-free behavior.</p></details>
+          <details><summary>How is the context secret handled?</summary><p>At creation, PBKDF2-HMAC-SHA256 uses the context and an independent random salt for each device to wrap its secret, seed, or anchor. The creator’s input is then cleared. Setup codes and the encrypted vault retain only the salt and wrapped material. Both people re-enter the context while using the TrustCode. Even if both omit it or enter the same wrong value, their independently salted material does not match. Leaving context empty at creation preserves normal context-free behavior.</p></details>
         </div>
       </section>
     </section>
@@ -150,6 +150,16 @@
       <label id="vault-confirm-field" class="field"><span>Confirm passphrase</span><input id="vault-confirm" type="password" autocomplete="new-password" minlength="12"></label>
       <div id="vault-error" class="notice error" role="alert" hidden></div>
       <div class="button-row"><button id="vault-cancel" class="secondary-button" type="button">Cancel</button><button id="vault-submit" class="primary-button" type="submit">Create encrypted vault</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="context-confirm-dialog" class="vault-dialog">
+    <form method="dialog" id="context-confirm-form">
+      <p class="step-label">Double-check context</p><h2>Confirm context</h2>
+      <p class="dialog-copy">Re-enter the exact context you provided. The channel will be created only if both entries match.</p>
+      <label class="field"><span>Confirm context</span><input id="context-confirm" type="password" maxlength="96" autocomplete="off" required><small>The context is held only in memory and is not placed in the setup code.</small></label>
+      <div id="context-confirm-error" class="notice error" role="alert" hidden></div>
+      <div class="button-row"><button id="context-confirm-cancel" class="secondary-button" type="button">Cancel</button><button id="context-confirm-submit" class="primary-button" type="submit">Confirm and create</button></div>
     </form>
   </dialog>
 

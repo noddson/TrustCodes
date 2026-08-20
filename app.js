@@ -36,6 +36,8 @@ const el = {
   vaultDot: $("#vault-dot"), vaultStatus: $("#vault-status"), vaultDetail: $("#vault-detail"), vaultAction: $("#vault-action"), vaultLock: $("#vault-lock"),
   vaultDialog: $("#vault-dialog"), vaultForm: $("#vault-form"), vaultDialogTitle: $("#vault-dialog-title"), vaultDialogCopy: $("#vault-dialog-copy"),
   vaultPassphrase: $("#vault-passphrase"), vaultConfirmField: $("#vault-confirm-field"), vaultConfirm: $("#vault-confirm"), vaultSubmit: $("#vault-submit"), vaultError: $("#vault-error"),
+  contextConfirmDialog: $("#context-confirm-dialog"), contextConfirmForm: $("#context-confirm-form"), contextConfirm: $("#context-confirm"),
+  contextConfirmSubmit: $("#context-confirm-submit"), contextConfirmError: $("#context-confirm-error"),
 };
 
 let entries = [];
@@ -50,6 +52,7 @@ let lastCounter = -1;
 let toastTimer;
 let contextTimer;
 let cameraScanner = null;
+let pendingCreateConfig = null;
 
 function active() { return entries.find((entry) => entry.id === activeId) || entries[0] || null; }
 function selected(name) { return $(`input[name="${name}"]:checked`).value; }
@@ -57,6 +60,25 @@ function showToast(message) { el.toast.textContent = message; el.toast.hidden = 
 function showError(message) { el.error.textContent = message; el.error.hidden = false; }
 function clearError() { el.error.hidden = true; el.error.textContent = ""; }
 function showVaultError(message) { el.vaultError.textContent = message; el.vaultError.hidden = false; }
+
+function showContextConfirmError(message) {
+  el.contextConfirmError.textContent = message;
+  el.contextConfirmError.hidden = false;
+}
+
+function clearContextConfirm() {
+  pendingCreateConfig = null;
+  el.contextConfirm.value = "";
+  el.contextConfirmError.textContent = "";
+  el.contextConfirmError.hidden = true;
+}
+
+function restoreContextInput(context) {
+  requestAnimationFrame(() => {
+    el.context.value = context;
+    el.context.focus();
+  });
+}
 
 function withoutContext(entry) {
   const { context, contextRequired, ...stored } = entry;
@@ -389,21 +411,62 @@ el.format.addEventListener("change", updateStrengthOptions);
 el.length.addEventListener("change", updateStrengthOptions);
 el.proofWords.addEventListener("change", updateProofStrengthDetails);
 
-$("#create-channel").addEventListener("click", async () => {
+async function createConfiguredChannel(config) {
   const button = $("#create-channel");
   button.disabled = true; button.textContent = "Preparing secure channel…";
   try {
-    const scheme = selected("scheme");
-    const pair = await createChannelPair({
-      name: el.name.value.trim() || "Private channel", context: el.context.value,
-      scheme, method: selected("method"), format: el.format.value,
-      role: selected("proof-role"), total: Number(el.proofTotal.value),
-      length: scheme === "proof" ? Number(el.proofWords.value) : Number(el.length.value),
-    });
+    const pair = await createChannelPair(config);
     pair.local.persisted = el.saveChannel.checked && Boolean(vaultKey);
     presentForSharing(pair.local, pair.peer);
   } catch (error) { showError(error.message); }
   finally { button.disabled = false; button.innerHTML = 'Create private channel <span aria-hidden="true">→</span>'; }
+}
+
+$("#create-channel").addEventListener("click", async () => {
+  clearError();
+  const scheme = selected("scheme");
+  const config = {
+    name: el.name.value.trim() || "Private channel", context: el.context.value,
+    scheme, method: selected("method"), format: el.format.value,
+    role: selected("proof-role"), total: Number(el.proofTotal.value),
+    length: scheme === "proof" ? Number(el.proofWords.value) : Number(el.length.value),
+  };
+  if (!config.context.trim()) return createConfiguredChannel(config);
+  clearContextConfirm();
+  pendingCreateConfig = config;
+  el.contextConfirmDialog.showModal();
+  el.contextConfirm.focus();
+});
+
+$("#context-confirm-cancel").addEventListener("click", () => {
+  const context = pendingCreateConfig?.context ?? "";
+  clearContextConfirm();
+  el.contextConfirmDialog.close();
+  restoreContextInput(context);
+});
+el.contextConfirmDialog.addEventListener("cancel", () => {
+  const context = pendingCreateConfig?.context ?? "";
+  clearContextConfirm();
+  restoreContextInput(context);
+});
+el.contextConfirm.addEventListener("input", () => {
+  el.contextConfirmError.textContent = "";
+  el.contextConfirmError.hidden = true;
+});
+el.contextConfirmForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!pendingCreateConfig) return el.contextConfirmDialog.close();
+  if (el.contextConfirm.value !== pendingCreateConfig.context) {
+    showContextConfirmError("The contexts do not match. Re-enter the exact context used during setup.");
+    el.contextConfirm.select();
+    return;
+  }
+  const config = pendingCreateConfig;
+  el.contextConfirmSubmit.disabled = true;
+  clearContextConfirm();
+  el.contextConfirmDialog.close();
+  try { await createConfiguredChannel(config); }
+  finally { el.contextConfirmSubmit.disabled = false; }
 });
 
 el.showImport.addEventListener("click", () => { stopCameraScanner(); el.setupStart.hidden = true; el.importView.hidden = false; clearError(); el.importCode.focus(); });
