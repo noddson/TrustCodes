@@ -266,7 +266,12 @@ function updateVaultUI() {
     el.vaultDetail.textContent = vaultPresent ? "Unlock to load saved entries." : "Create one to encrypt saved entries at rest.";
     el.vaultAction.hidden = false;
     el.vaultAction.disabled = false;
-    el.vaultAction.textContent = vaultPresent ? "Unlock vault" : "Create vault";
+    el.vaultAction.classList.toggle("vault-unlock-icon", vaultPresent);
+    el.vaultAction.setAttribute("aria-label", vaultPresent ? "Unlock vault" : "Create vault");
+    el.vaultAction.title = vaultPresent ? "Unlock vault" : "";
+    el.vaultAction.innerHTML = vaultPresent
+      ? '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>'
+      : "Create vault";
   }
   el.vaultSettings.hidden = !vaultAvailable || !vaultPresent;
   el.vaultLock.hidden = !unlocked;
@@ -485,6 +490,14 @@ function verificationResult(valid, message) {
   el.result.textContent = message;
 }
 
+function clearVaultCredentialInputs() {
+  el.vaultPassphrase.value = "";
+  el.vaultConfirm.value = "";
+  el.currentVaultPassword.value = "";
+  el.newVaultPassword.value = "";
+  el.confirmNewVaultPassword.value = "";
+}
+
 function openVaultDialog() {
   const creating = !vaultPresent;
   el.vaultDialog.dataset.mode = creating ? "create" : "unlock";
@@ -501,7 +514,8 @@ function openVaultDialog() {
   el.vaultDeviceSubmit.hidden = creating || !vaultDevice || !deviceUnlockCapable;
   el.vaultUnlockDivider.hidden = el.vaultDeviceSubmit.hidden;
   el.vaultSubmit.textContent = creating ? "Create encrypted vault" : "Unlock vault";
-  el.vaultPassphrase.value = ""; el.vaultConfirm.value = ""; el.vaultError.hidden = true;
+  clearVaultCredentialInputs();
+  el.vaultError.hidden = true;
   el.vaultDialog.showModal();
   (el.vaultDeviceSubmit.hidden ? el.vaultPassphrase : el.vaultDeviceSubmit).focus();
 }
@@ -516,9 +530,7 @@ function openVaultOptionsDialog() {
 }
 
 function clearChangePasswordForm() {
-  el.currentVaultPassword.value = "";
-  el.newVaultPassword.value = "";
-  el.confirmNewVaultPassword.value = "";
+  clearVaultCredentialInputs();
   el.changePasswordError.textContent = "";
   el.changePasswordError.hidden = true;
   const canOfferDevice = deviceUnlockCapable;
@@ -911,11 +923,14 @@ $("#forget-channel").addEventListener("click", async () => {
 el.vaultAction.addEventListener("click", openVaultDialog);
 el.vaultLock.addEventListener("click", () => {
   clearActiveContext();
+  clearVaultCredentialInputs();
   entries = entries.filter((entry) => !entry.persisted);
   vaultKey = null; activeId = entries[0]?.id || null; renderWorkspace(); updateVaultUI(); showToast("Encrypted vault locked");
 });
 $("#vault-cancel").addEventListener("click", () => { openVaultOptionsAfterUnlock = false; el.vaultDialog.close(); });
 el.vaultDialog.addEventListener("cancel", () => { openVaultOptionsAfterUnlock = false; });
+el.vaultDialog.addEventListener("close", clearVaultCredentialInputs);
+el.changePasswordDialog.addEventListener("close", clearVaultCredentialInputs);
 el.vaultDeviceSubmit.addEventListener("click", async () => {
   el.vaultDeviceSubmit.disabled = true;
   el.vaultDeviceSubmit.textContent = "Confirm on device…";
