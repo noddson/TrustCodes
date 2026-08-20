@@ -16,7 +16,7 @@ All application code still runs in the browser. The local server only delivers t
 
 ## Simple mode
 
-Once a channel is available, **Simple mode** replaces the normal workspace with one large active code or proof phrase, the person's name and photo, and a visual list of the other available channels. The mode preference is stored in local browser storage for that origin. Press the camera icon on the active photo to take or choose a picture; saved-channel photos are resized locally and stored inside the encrypted vault entry.
+Once a channel is available, **Simple mode** replaces the normal workspace with one large active code or proof phrase, the person's name and photo, and a visual list of the other available channels. The mode preference is stored in local browser storage for that origin. Pressing the camera icon opens the operating system's image picker; saved-channel photos are resized locally and stored inside the encrypted vault entry.
 
 `npm start` generates `version.json` before serving the app. Its displayed version is `YYYY.MM.<7-character Git commit>`, with `.d` appended when tracked files differ from `HEAD`. The footer links a valid generated version to that exact commit. CI or deployment builds can use `GITHUB_SHA` or `COMMIT_SHA`; `version.json` is a generated artifact and is not committed.
 
@@ -44,13 +44,21 @@ The QR encoder and fallback decoder are vendored for offline use. See [THIRD_PAR
 
 ## Encrypted local vault
 
-Saved channels are stored in IndexedDB as an AES-256-GCM ciphertext. A key is derived locally from the vault passphrase with PBKDF2-HMAC-SHA256, a random 128-bit salt, and 600,000 iterations. Neither the passphrase nor the derived key is persisted.
+Saved channels are stored in IndexedDB as an AES-256-GCM ciphertext. New vaults use a random 256-bit data-encryption key. The recovery password is processed locally with PBKDF2-HMAC-SHA256, a random 128-bit salt, and 600,000 iterations; that derived key wraps the random vault key. Neither the password nor any unwrapped key is persisted. A saved channel's locally resized contact photo is part of the encrypted ciphertext.
+
+On compatible secure browsers, vault creation can also register a local passkey and use the WebAuthn PRF extension after system user verification. The 32-byte PRF result is passed through HKDF and wraps the same random vault key, allowing Face ID, fingerprint, or device-passcode unlock while the recovery password remains available. Trust Codes stores only the credential ID, random PRF input, KDF salt, and wrapped vault key—not biometric data, a device passcode, or the PRF secret. Actual PRF support is established only when the browser and passkey provider successfully create the device-unlock credential.
+
+The gear beside the vault control opens vault options. An unlocked vault password can be changed there, and device unlock can be enabled or removed. The current password is verified before saved entries are re-encrypted with a fresh vault key and salt. Keeping device unlock enabled also requires system user verification so the new vault key can be wrapped again. A failed verification, passkey operation, or encryption attempt leaves the previous vault record intact.
+
+The same gear offers **Purge vault**, protected by two warning and confirmation stages. Purging permanently deletes the encrypted vault record in the current browser context, including all saved channels, photos, counters, and proof state. Unsaved in-memory channels are not deleted. A Trust Codes passkey may remain listed in the operating system's credential manager because websites cannot delete it directly, but it is useless after its corresponding encrypted vault record is purged.
+
+Without an unlocked vault and an explicitly selected save option, channels, cryptographic material, counters, proof state, and contact photos remain only in the current page's memory and disappear on reload or close. They are not written to plaintext browser storage. The only simple-mode value stored outside the vault is the non-sensitive on/off preference in LocalStorage.
 
 This protects secrets **at rest** while the vault is locked or the browser is closed. It does not protect an unlocked session: the page's JavaScript must be able to use the key and decrypted channel material, so a compromised page, browser extension, browser profile, or device could expose it. JavaScript also cannot guarantee immediate zeroization after locking because garbage collection is controlled by the runtime.
 
-For isolation backed by the operating system's Keychain/Credential Manager, this static web app would need to become a signed native application or native wrapper. WebAuthn can protect an unlock operation, but a purely web client still has to expose usable secrets to its JavaScript runtime after unlock.
+WebAuthn PRF binds the device-unlock wrapping secret to a passkey and requires the browser's system user-verification ceremony. It does not turn the static site into a native keychain: after a successful unlock, the page's JavaScript runtime still receives a usable in-memory vault key.
 
-Keep the one-time setup code somewhere safe. Browser data can be cleared, and there is no recovery service for the vault passphrase.
+Keep the one-time setup code somewhere safe. Browser data can be cleared, and there is no recovery service for the vault password.
 
 ## Trust models
 
