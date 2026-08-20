@@ -1,0 +1,42 @@
+@media (max-width: 760px) {
+  body.simple-mode-active {
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  .simple-mode {
+    min-height: 0;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  .simple-header,
+  .simple-people {
+    flex: none;
+  }
+
+  .simple-main {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .simple-people {
+    padding-bottom: calc(14px + env(safe-area-inset-bottom));
+  }
+
+  .simple-people-list {
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    padding-bottom: 2px;
+    scrollbar-width: thin;
+  }
+
+  .simple-person {
+    flex: 0 0 98px;
+  }
+}
