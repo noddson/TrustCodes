@@ -7,12 +7,26 @@ Trust Codes is a client-only HOTP/TOTP application. It has no backend, but it mu
 From this directory:
 
 ```bash
-python3 -m http.server 4173
+npm start
 ```
 
 Then open [http://localhost:4173](http://localhost:4173).
 
 All application code still runs in the browser. The local server only delivers the static HTML, CSS, and JavaScript files. Use the same URL and port each time because browser storage is scoped to its origin.
+
+`npm start` generates `version.json` before serving the app. Its displayed version is `YYYY.MM.<7-character Git commit>`, with `.d` appended when tracked files differ from `HEAD`. The footer links a valid generated version to that exact commit. CI or deployment builds can use `GITHUB_SHA` or `COMMIT_SHA`; `version.json` is a generated artifact and is not committed.
+
+## Important security and liability limitations
+
+Trust Codes compares possession of configured cryptographic material. It does not establish a person's identity, authority, honesty, intent, or physical presence, and it cannot guarantee that a person, conversation, device, channel, or request is legitimate, private, uncompromised, or secure. Codes and proofs can be shared, relayed, coerced, stolen, guessed, or generated on a compromised device.
+
+To the fullest extent permitted by law, this app is provided “as is” and “as available,” without warranties or guarantees, and the developer is not liable for loss or harm arising from its use, misuse or reliance on its results. It is important to independently confirm the person and every sensitive, unusual, urgent, or high-value request using a previously trusted contact method before sharing information, sending money, granting access, or acting. You assume all risk of use.
+
+This notice describes intended product limitations; it is not legal advice and does not replace advice from a qualified lawyer about enforceability, consumer-protection rules, privacy obligations, or the terms needed for a particular deployment or jurisdiction.
+
+## Pay what you want
+
+Trust Codes is available without payment. Anyone who wants to support continued development can make an optional [pay-what-you-want contribution](https://paypal.me/noddson).
 
 ## QR setup exchange
 
@@ -50,5 +64,5 @@ The green details card beneath each strength selector gives the qualitative rati
 ## Test
 
 ```bash
-npm test
+npm run check
 ```

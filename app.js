@@ -13,6 +13,7 @@ import {
 import { drawQrCode } from "./qr.js";
 import { cameraErrorMessage, normalizeScannedSetupCode, QrCameraScanner } from "./qr-scanner.js";
 import { createVault, saveVault, unlockVault, vaultExists } from "./vault.js";
+import { loadBuildVersion } from "./build-version.js";
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -364,6 +365,23 @@ async function initializeVault() {
   updateVaultUI();
 }
 
+async function renderBuildVersion() {
+  const versionElement = $("#app-version");
+  if (!versionElement) return;
+
+  const version = await loadBuildVersion(window.location.href);
+  if (!version) return;
+
+  const label = document.createTextNode("Version: ");
+  const link = document.createElement("a");
+  link.href = version.githubCommitUrl;
+  link.textContent = version.displayVersion;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  link.title = version.fullSha;
+  versionElement.replaceChildren(label, link);
+}
+
 $$('[data-tab]').forEach((button) => button.addEventListener("click", () => switchTab(button.dataset.tab)));
 $$('[data-go-setup]').forEach((button) => button.addEventListener("click", () => { resetSetupViews(); switchTab("setup"); }));
 $$('input[name="scheme"]').forEach((radio) => radio.addEventListener("change", updateScheme));
@@ -504,4 +522,4 @@ el.vaultForm.addEventListener("submit", async (event) => {
 document.addEventListener("visibilitychange", () => { if (document.hidden) stopCameraScanner(); });
 window.addEventListener("pagehide", () => stopCameraScanner());
 
-updateStrengthOptions(); updateProofStrengthDetails(); updateScheme(); renderWorkspace(); initializeVault(); tick(); setInterval(tick, 250);
+updateStrengthOptions(); updateProofStrengthDetails(); updateScheme(); renderWorkspace(); initializeVault(); renderBuildVersion(); tick(); setInterval(tick, 250);

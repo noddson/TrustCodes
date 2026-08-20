@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#f5f1e8">
   <meta name="description" content="Client-only mutual and one-way trust codes for out-of-band conversations.">
   <title>Trust Codes — know it’s really them</title>
-  <link rel="stylesheet" href="styles.css?v=11">
-  <script type="module" src="app.js?v=11"></script>
+  <link rel="stylesheet" href="styles.css?v=12">
+  <script type="module" src="app.js?v=12"></script>
 </head>
 <body>
   <header class="site-header">
@@ -153,7 +153,13 @@
     </form>
   </dialog>
 
-  <footer><span>Trust Codes</span><span>Client-only · RFC 4226/6238 · SHA-256 hash chain</span></footer>
+  <footer class="app-footer">
+    <p id="app-version" class="app-version">Version: unavailable</p>
+    <p><strong>Important limitation:</strong> Trust Codes only helps compare possession of configured cryptographic material. A matching code or accepted proof does not guarantee or establish anyone’s identity, authority, honesty, intent, or physical presence, or that any person, conversation, device, channel, or request is legitimate, private, uncompromised, or secure. Codes and proofs can be shared, relayed, coerced, stolen, guessed, or generated on a compromised device.</p>
+    <p>To the fullest extent permitted by law, this app is provided “as is” and “as available,” without warranties or guarantees, and the developer is not liable for loss or harm arising from its use, misuse or reliance on its results. It is important to independently confirm the person and every sensitive, unusual, urgent, or high-value request using a previously trusted contact method before sharing information, sending money, granting access, or acting. You assume all risk of use.</p>
+    <p>Support continued development with a <a href="https://paypal.me/noddson" target="_blank" rel="noopener noreferrer"><strong>pay-what-you-want contribution</strong></a>. Trust Codes remains available without payment.</p>
+    <p>© 2026 Nick Oddson. All rights reserved.</p>
+  </footer>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 </body>
 </html>

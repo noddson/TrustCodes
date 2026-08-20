@@ -4,7 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test"
+    "generate:version": "node generate-version.mjs",
+    "start": "npm run generate:version && python3 -m http.server 4173",
+    "test": "node --test",
+    "validate:version": "node validate-version.mjs",
+    "check": "npm test && npm run validate:version"
   },
   "devDependencies": {
     "jsqr": "^1.4.0",
