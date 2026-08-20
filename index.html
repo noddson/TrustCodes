@@ -6,14 +6,20 @@
   <meta name="theme-color" content="#f5f1e8">
   <meta name="description" content="Client-only mutual and one-way trust codes for out-of-band conversations.">
   <title>Trust Codes — check it’s really them</title>
-  <link rel="stylesheet" href="styles.css?v=15">
+  <link rel="icon" type="image/png" sizes="64x64" href="assets/trust-codes-favicon.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/trust-codes-apple-touch-icon.png">
+  <link rel="stylesheet" href="styles.css?v=16">
+  <link rel="stylesheet" href="brand-icon.css?v=1">
   <script type="module" src="app.js?v=16"></script>
 </head>
 <body>
   <section id="simple-mode" class="simple-mode" aria-label="Simple trust code view" hidden>
     <header class="simple-header">
       <div class="simple-brand" aria-label="Trust Codes">
-        <svg class="brand-mark" viewBox="0 0 44 44" aria-hidden="true"><path class="shield" d="M22 3.5 36.5 9v11.3c0 9.7-5.8 16.3-14.5 20.2C13.3 36.6 7.5 30 7.5 20.3V9L22 3.5Z"/><path class="check" d="m15 22 4.5 4.5 9.5-10"/></svg>
+        <picture class="brand-mark-picture">
+          <source media="(prefers-reduced-motion: reduce)" srcset="assets/trust-codes-icon-transparent.png">
+          <img class="brand-mark" src="assets/trust-codes-icon-animated.gif" width="192" height="192" alt="" aria-hidden="true">
+        </picture>
         <span>Trust Codes</span>
       </div>
       <div class="simple-mode-pill"><i aria-hidden="true"></i>Simple mode</div>
@@ -65,7 +71,10 @@
 
   <header class="site-header">
     <a class="brand" href="#" aria-label="Trust Codes home">
-      <svg class="brand-mark" viewBox="0 0 44 44" aria-hidden="true"><path class="shield" d="M22 3.5 36.5 9v11.3c0 9.7-5.8 16.3-14.5 20.2C13.3 36.6 7.5 30 7.5 20.3V9L22 3.5Z"/><path class="check" d="m15 22 4.5 4.5 9.5-10"/></svg>
+      <picture class="brand-mark-picture">
+        <source media="(prefers-reduced-motion: reduce)" srcset="assets/trust-codes-icon-transparent.png">
+        <img class="brand-mark" src="assets/trust-codes-icon-animated.gif" width="192" height="192" alt="" aria-hidden="true">
+      </picture>
       <span>Trust Codes</span>
     </a>
     <div class="header-actions">

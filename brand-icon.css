@@ -1,0 +1,25 @@
+.brand-mark-picture {
+  display: block;
+  width: 48px;
+  height: 48px;
+  flex: none;
+}
+
+.brand-mark-picture .brand-mark {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.simple-brand .brand-mark-picture {
+  width: 46px;
+  height: 46px;
+}
+
+@media (max-width: 390px) {
+  .simple-brand .brand-mark-picture {
+    width: 42px;
+    height: 42px;
+  }
+}
