@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; object-src 'none'; script-src 'self' https://accounts.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com; frame-src https://accounts.google.com; media-src 'self' blob:; worker-src 'none'; manifest-src 'none'; form-action 'self'; upgrade-insecure-requests">
+  <meta name="referrer" content="no-referrer">
   <meta name="theme-color" content="#f5f1e8">
   <meta name="description" content="Client-only mutual and one-way trust codes for out-of-band conversations.">
   <title>TrustCodes — check it’s really them</title>
@@ -136,8 +138,8 @@
                 <label><input type="radio" name="proof-role" value="prove" checked><span><strong>I prove to them</strong><small>This device keeps the chain seed</small></span></label>
                 <label><input type="radio" name="proof-role" value="verify"><span><strong>They prove to me</strong><small>This device stores only the hash anchor</small></span></label>
               </div></fieldset>
-              <label class="field"><span>Proofs before renewal</span><select id="proof-total"><option value="100">100 proofs</option><option value="500">500 proofs</option><option value="1000" selected>1,000 proofs</option><option value="5000">5,000 proofs</option></select><small>Each accepted phrase can be used only once.</small></label>
-              <div class="field"><span><label for="proof-words">Proof phrase strength</label></span><select id="proof-words"><option value="4">4 words</option><option value="5">5 words</option><option value="6" selected>6 words</option><option value="7">7 words</option><option value="8">8 words</option></select><div id="proof-strength-details" class="strength-rating"></div><small>SHA-256 one-way proof phrase.</small></div>
+              <label class="field"><span>Proofs before renewal</span><select id="proof-total"><option value="100">100 proofs</option><option value="500">500 proofs</option><option value="1000" selected>1,000 proofs</option><option value="5000">5,000 proofs</option></select><small>Each verifier advances its own local state after accepting a phrase.</small></label>
+              <div class="field"><span><label for="proof-words">Proof phrase strength</label></span><select id="proof-words"><option value="5">5 words · OK</option><option value="6" selected>6 words · Good</option><option value="7">7 words · Great</option><option value="8">8 words · Excellent</option><option value="9">9 words · Fantastic</option><option value="10">10 words · Legendary</option></select><div id="proof-strength-details" class="strength-rating"></div><small>SHA-256 one-way proof phrase.</small></div>
             </div>
           </div>
 
@@ -146,8 +148,9 @@
         </div>
 
         <div id="import-view" hidden>
-          <div class="panel-heading"><div><p class="step-label">Join a channel</p><h2>Import their setup code</h2><p>The setup code includes its trust model and your device’s role, but never the context.</p></div></div>
-          <label class="field full-field"><span>Setup code</span><textarea id="import-code" rows="4" spellcheck="false" placeholder="TC1-…"></textarea><small>It contains independently salted, context-wrapped secret material—not the context itself. Learn the context separately from the creator.</small></label>
+          <div class="panel-heading"><div><p class="step-label">Join a channel</p><h2>Import their setup code</h2><p>New setup codes are encrypted and authenticated by a separate one-time passphrase.</p></div></div>
+          <label class="field full-field"><span>Setup code</span><textarea id="import-code" rows="4" spellcheck="false" placeholder="TC2-…"></textarea><small>Scan or paste the encrypted setup package. Legacy TC1 setup codes remain supported.</small></label>
+          <label class="field full-field setup-passphrase-input"><span>One-time setup passphrase</span><input id="import-setup-passphrase" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Enter all eight words"><small>Get these eight words separately from the creator. They are never included in the setup code or QR.</small></label>
           <div class="camera-scan-prompt"><div><strong>Scan from another device</strong><small>The camera remains off until you enable it. Frames stay on this device and are never saved.</small></div><button id="start-scanner" class="secondary-button" type="button">Enable camera scanner</button></div>
           <div id="scanner-view" class="scanner-view" hidden>
             <div class="scanner-video"><video id="scanner-video" playsinline muted aria-label="Camera preview for QR scanning"></video><span class="scanner-frame" aria-hidden="true"></span></div>
@@ -160,9 +163,11 @@
 
         <div id="share-view" class="share-card" hidden>
           <div class="success-icon" aria-hidden="true">✓</div>
-          <div><p class="step-label">Channel ready</p><h3>Share this setup code once</h3><p id="share-instruction"></p></div>
+          <div><p class="step-label">Channel ready</p><h3>Share these setup details once</h3><p id="share-instruction"></p></div>
           <div class="secret-box"><code id="setup-code"></code><div class="secret-actions"><button id="copy-setup" class="icon-button" type="button" aria-label="Copy setup code">Copy</button><button id="show-setup-qr" class="icon-button" type="button">Show QR</button></div></div>
-          <div id="setup-qr-panel" class="setup-qr-panel" hidden><canvas id="setup-qr" role="img" aria-label="QR code containing the setup code"></canvas><div><strong>Scan once on the other device</strong><p>This QR contains the same sensitive setup code shown above. It never contains the context.</p><button id="hide-setup-qr" class="text-button" type="button">Hide QR code</button></div></div>
+          <div class="setup-auth-box setup-passphrase-box"><div><strong>One-time setup passphrase</strong><code id="setup-passphrase"></code><p>Provide these eight words separately from the setup code. They are not saved and disappear when you leave this screen.</p></div><button id="copy-setup-passphrase" class="icon-button" type="button">Copy words</button></div>
+          <div class="setup-auth-box setup-fingerprint-box"><div><strong>Setup fingerprint</strong><code id="setup-fingerprint"></code><p>After they enter the passphrase, compare this short code before they confirm the import.</p></div></div>
+          <div id="setup-qr-panel" class="setup-qr-panel" hidden><canvas id="setup-qr" role="img" aria-label="QR code containing the encrypted setup code"></canvas><div><strong>Scan once on the other device</strong><p>This QR contains only the encrypted setup package. It never contains the one-time passphrase or context.</p><button id="hide-setup-qr" class="text-button" type="button">Hide QR code</button></div></div>
           <div class="button-row share-actions"><button id="cancel-share" class="secondary-button" type="button">Start over</button><button id="finish-setup" class="primary-button" type="button">Continue to trust codes</button></div>
         </div>
         <div id="setup-error" class="notice error" role="alert" hidden></div>
@@ -186,7 +191,7 @@
           </section>
 
           <section id="verify-card" class="code-card verify-card" hidden>
-            <div class="card-copy"><p class="step-label">One-way verification</p><h2>Check their proof phrase</h2><p id="verify-prompt">Ask for their current proof phrase. A successful proof is consumed immediately.</p><small id="verify-remaining" class="remaining-text"></small></div>
+            <div class="card-copy"><p class="step-label">One-way verification</p><h2>Check their proof phrase</h2><p id="verify-prompt">Ask for their current proof phrase. A successful proof advances this verifier’s local state.</p><small id="verify-remaining" class="remaining-text"></small></div>
             <div class="code-area"><label class="otp-input-wrap"><span class="sr-only">Proof phrase</span><textarea id="verify-code" rows="4" placeholder="proof phrase…"></textarea></label><button id="verify-button" class="primary-button full" type="button">Verify and consume proof</button><div id="verify-result" class="verify-result" role="status" aria-live="polite" hidden></div></div>
           </section>
 
@@ -199,7 +204,7 @@
         <p class="step-label">Two trust models</p><h2>Compare together or prove one way</h2>
         <div class="explain-grid">
           <article><span>↔</span><h3>Mutual HOTP/TOTP</h3><p>Both devices share one secret and display the same code. Neither side has a privileged role.</p></article>
-          <article><span>→</span><h3>One-way proof</h3><p>The prover holds a seed. The verifier stores only a hash anchor and cannot calculate the next configurable 4–8 word phrase.</p></article>
+          <article><span>→</span><h3>One-way proof</h3><p>The prover holds a seed. The verifier stores only a hash anchor and cannot calculate the next configurable 5–10 word phrase.</p></article>
           <article><span>✦</span><h3>Optional context</h3><p>The creator can bind setup material to a context and then discard it. Both people re-enter it while using the TrustCode; it is never stored or exported.</p></article>
         </div>
         <div class="learn-details">
@@ -231,6 +236,16 @@
       <label class="field"><span>Confirm context</span><input id="context-confirm" type="password" maxlength="96" autocomplete="off" required><small>The context is held only in memory and is not placed in the setup code.</small></label>
       <div id="context-confirm-error" class="notice error" role="alert" hidden></div>
       <div class="button-row"><button id="context-confirm-cancel" class="secondary-button" type="button">Cancel</button><button id="context-confirm-submit" class="primary-button" type="submit">Confirm and create</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="setup-fingerprint-dialog" class="vault-dialog setup-fingerprint-dialog">
+    <form method="dialog" id="setup-fingerprint-form">
+      <p class="step-label">Authenticated setup</p><h2>Compare setup fingerprints</h2>
+      <p class="dialog-copy">Ask the creator to read the short fingerprint shown on their device. Import only if every character matches.</p>
+      <div class="setup-fingerprint-confirm"><strong>Setup fingerprint</strong><code id="import-setup-fingerprint"></code></div>
+      <label class="remember-row setup-fingerprint-check"><input id="setup-fingerprint-confirmed" type="checkbox"><span><strong>The fingerprint matches exactly</strong><small>A mismatch means the setup code may have been replaced or corrupted.</small></span></label>
+      <div class="button-row"><button id="setup-fingerprint-cancel" class="secondary-button" type="button">Cancel import</button><button id="setup-fingerprint-submit" class="primary-button" type="submit" disabled>Confirm and import</button></div>
     </form>
   </dialog>
 

@@ -24,6 +24,8 @@ Once a channel is available, **Simple mode** replaces the normal workspace with 
 
 TrustCodes compares possession of configured cryptographic material. It does not establish a person's identity, authority, honesty, intent, or physical presence, and it cannot guarantee that a person, conversation, device, channel, or request is legitimate, private, uncompromised, or secure. Codes and proofs can be shared, relayed, coerced, stolen, guessed, or generated on a compromised device.
 
+**Client-only proof-state limitation:** TrustCodes has no server, shared ledger, or authoritative record of which one-way proofs have already been accepted. Replay resistance depends on each verifier retaining its newest local hash-chain anchor. A phrase rejected by the current verifier can be accepted again by a stale, duplicated, restored, cleared, or rolled-back verifier state. Multiple verifier devices and backups can also diverge. Treat “consumed” as a change to one local verifier state—not a guarantee that a proof is globally or permanently unreplayable—and independently confirm sensitive requests through a previously trusted channel.
+
 To the fullest extent permitted by law, this app is provided “as is” and “as available,” without warranties or guarantees, and the developer is not liable for loss or harm arising from its use, misuse or reliance on its results. It is important to independently confirm the person and every sensitive, unusual, urgent, or high-value request using a previously trusted contact method before sharing information, sending money, granting access, or acting. You assume all risk of use.
 
 This notice describes intended product limitations; it is not legal advice and does not replace advice from a qualified lawyer about enforceability, consumer-protection rules, privacy obligations, or the terms needed for a particular deployment or jurisdiction.
@@ -34,11 +36,14 @@ TrustCodes is available without payment. Anyone who wants to support continued d
 
 ## QR setup exchange
 
-- After creating a channel, **Show QR** renders the same setup code locally. The QR is hidden until requested and cleared from its canvas when hidden or when setup finishes.
+- New channels use an authenticated `TC2-` setup package. TrustCodes generates a random eight-word one-time setup passphrase, derives an AES-256-GCM key with PBKDF2-HMAC-SHA256, a random 128-bit salt, and 600,000 iterations, and encrypts the complete setup payload. The passphrase is never included in the setup code or QR.
+- Send the encrypted setup code and its one-time passphrase through separate methods. After authenticated decryption, both devices display the same 48-bit SHA-256 setup fingerprint in a visually distinct format such as `9F2A-C71D-84B6`; the importer must explicitly confirm that every character matches before the channel is accepted.
+- The setup passphrase and fingerprint are cleared when the creator leaves the sharing screen. The importer clears the passphrase immediately after successful decryption. They are never persisted in the vault. A copied setup package can still be decrypted later by anyone who obtains its passphrase, so “one-time” describes the intended exchange rather than guaranteed erasure of copies.
+- **Show QR** renders only the encrypted setup package locally. The QR is hidden until requested and cleared from its canvas when hidden or when setup finishes.
 - On import, **Enable camera scanner** requests camera permission only after the button is pressed. It prefers the browser's native QR detector and falls back to the locally vendored `jsQR` decoder.
 - Camera frames are processed only in page memory, are never uploaded or saved, and capture stops after a successful scan, cancellation, tab change, page hiding, or navigation.
 - Camera access requires HTTPS or `localhost`. Pasting the setup code remains available if permission is denied or no camera is present.
-- A setup QR is as sensitive as its text setup code. It contains wrapped channel material and its salt, but never the context.
+- Legacy `TC1-` setup codes remain importable for compatibility, but they are not authenticated by a one-time setup passphrase and the app labels them as legacy imports.
 
 The QR encoder and fallback decoder are vendored for offline use. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
@@ -58,7 +63,7 @@ This protects secrets **at rest** while the vault is locked or the browser is cl
 
 WebAuthn PRF binds the device-unlock wrapping secret to a passkey and requires the browser's system user-verification ceremony. It does not turn the static site into a native keychain: after a successful unlock, the page's JavaScript runtime still receives a usable in-memory vault key.
 
-Keep the one-time setup code somewhere safe. Browser data can be cleared, and there is no recovery service for the vault passphrase.
+Keep any setup backup and its one-time passphrase safe and separate. Browser data can be cleared, and there is no recovery service for either the setup passphrase or vault passphrase.
 
 ## Google Drive encrypted backup
 
@@ -76,15 +81,28 @@ Access tokens are held only in page memory and are revoked when **Disconnect** i
 ## Trust models
 
 - Mutual HOTP/TOTP stores the same secret on both devices, so either device can generate the same code.
-- One-way proof gives the prover a private hash-chain seed and the verifier only the current anchor. Each accepted phrase is consumed once. Phrase strength is configurable from four words (Okay, 44 bits) through eight words (Fantastic, 88 bits), with six words (Great, 66 bits) as the default.
+- One-way proof gives the prover a private hash-chain seed and the verifier only the current anchor. An accepting verifier advances its own local anchor so that same state rejects the phrase afterward; this is not global replay prevention and can be undone by state rollback or replacement. New channels require 5 to 10 words: 5 (OK, 55 bits), 6 (Good, 66 bits), 7 (Great, 77 bits), 8 (Excellent, 88 bits), 9 (Fantastic, 99 bits), or 10 (Legendary, 110 bits). Four-word proofs and setup imports are rejected as too weak.
+- The generated one-time setup passphrase authenticates and encrypts the initial setup package. It is separate from both the vault recovery passphrase and the optional per-use context. It confirms possession of the independently transferred setup passphrase, not a person's legal identity, and it cannot prevent real-time relay or compromise of both transfer methods.
 - Context is an optional shared secret fixed by the creator. PBKDF2-HMAC-SHA256 (600,000 rounds) combines it with a different random salt for each device and wraps that device's secret, seed, or anchor. The creator's input is then discarded. Setup codes and vault entries contain only the salt and wrapped material, never the context value.
 - Both people re-enter the context only while using the TrustCode. If both omit a configured context—or enter the same wrong value—the independently salted material produces unrelated codes or proofs. If the creator leaves context blank, the channel preserves normal context-free HOTP/TOTP or hash-chain behavior.
 - A context is closer to an additional secret than a public cryptographic salt. Use a strong, memorable value if relying on it: someone with setup material and an observed valid code may be able to test context guesses offline.
 - Human-facing letters-and-numbers codes use Crockford Base32 (`0123456789ABCDEFGHJKMNPQRSTVWXYZ`). Internal shared secrets continue to use RFC 4648 Base32. When normalizing entered codes, `O` is accepted as `0`, while `I` and `L` are accepted as `1`.
 
-Strength labels consistently compare the raw displayed guess space: Very weak (&lt;17 bits), Weak (17–21), Basic (22–32), Fair (33–43), Okay (44–54), Good (55–65), Great (66–76), Excellent (77–87), and Fantastic (88+). These labels do not measure the entropy of the underlying shared secret or determine whether a request is safe.
+Mutual-code strength labels compare the raw displayed guess space: Very weak (&lt;17 bits), Weak (17–21), Basic (22–32), Fair (33–43), Okay (44–54), Good (55–65), Great (66–76), Excellent (77–87), and Fantastic (88+). One-way proofs use the more conservative tiers listed above. These labels do not measure the entropy of the underlying shared secret or determine whether a request is safe.
 
 The green details card beneath each strength selector gives the qualitative rating, exact number of possible values, and an illustrative average and exhaustive search time at 20 billion trials per second. This is a fixed high-end-GPU-class scenario, not a prediction. For one-way proofs, offline search is relevant if the verifier anchor is exposed. For mutual codes, enumerating the displayed code space does not recover the shared secret because an observed code does not provide an offline correctness test.
+
+## Browser security policy
+
+- The application and privacy-policy pages enforce a restrictive Content Security Policy before loading any resources and send no referrer information on outbound navigation.
+- `_headers` defines the complete response-header policy for header-capable static hosts or reverse proxies, including clickjacking protection, MIME-sniffing protection, browser-feature restrictions, cross-origin opener/resource policies, and HSTS.
+- GitHub Pages supplies HTTPS/HSTS but does not apply repository `_headers` files. On the current GitHub Pages deployment, the CSP and referrer policy are enforced through HTML metadata; the remaining response-only controls require a header-capable host or proxy in front of the site.
+
+## Deployment dependency controls
+
+- `package-lock.json` fixes npm dependency archives by exact version, registry URL, and integrity hash. CI installs that lockfile with lifecycle scripts disabled, audits high-severity vulnerabilities, and does not install dependencies in the deployment job.
+- Every third-party GitHub Action is pinned to a full commit SHA. Checkout does not persist workflow credentials, the runner and Node release are fixed, and a regression test rejects mutable Action references or weakened install settings.
+- Dependabot checks npm and GitHub Actions dependencies weekly. Updates still require the normal validation job before deployment.
 
 ## Test
 

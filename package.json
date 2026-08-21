@@ -11,7 +11,7 @@
     "check": "npm test && npm run validate:version"
   },
   "devDependencies": {
-    "jsqr": "^1.4.0",
-    "qrcode-generator": "^2.0.4"
+    "jsqr": "1.4.0",
+    "qrcode-generator": "2.0.4"
   }
 }

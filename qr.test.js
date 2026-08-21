@@ -19,8 +19,10 @@ test("QR generation rejects empty or oversized values", () => {
 
 test("the scanner accepts only bounded TrustCodes setup payloads", () => {
   assert.equal(normalizeScannedSetupCode("  TC1-abc123  "), "TC1-abc123");
+  assert.equal(normalizeScannedSetupCode("  TC2-encrypted123  "), "TC2-encrypted123");
   assert.equal(normalizeScannedSetupCode("https://example.com"), "");
   assert.equal(normalizeScannedSetupCode(`TC1-${"a".repeat(20_000)}`), "");
+  assert.equal(normalizeScannedSetupCode("TC3-unsupported"), "");
 });
 
 test("camera failures have actionable privacy-preserving messages", () => {

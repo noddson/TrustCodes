@@ -7,17 +7,23 @@ import {
   createChannelPair,
   decodeBase32,
   decodeBase64Url,
+  decodeProtectedSetupCode,
   decodeSetupCode,
   encodeBase32,
   encodeBase64Url,
   encodeCrockfordBase32,
+  encodeProtectedSetupCode,
   encodeSetupCode,
   formatDigest,
+  generateSetupPassphrase,
   generateMutualCode,
   generateProofPhrase,
   hmacForCounter,
+  isProtectedSetupCode,
   normalizeCode,
   permutationCount,
+  setupFingerprint,
+  validateProtectedSetupCode,
   verifyMutualCode,
   verifyProofPhrase,
 } from "./otp.js";
@@ -116,6 +122,39 @@ test("setup codes omit context while manually matching contexts still interopera
   );
 });
 
+test("authenticated setup codes require the generated passphrase and expose a comparable fingerprint", async () => {
+  const { peer } = await createChannelPair({ name: "Authenticated setup", context: "", scheme: "mutual", method: "totp", format: "numeric", length: 8 });
+  const passphrase = generateSetupPassphrase();
+  const words = passphrase.split(" ");
+  assert.equal(words.length, 8);
+  assert.equal(words.every((word) => WORDS.includes(word)), true);
+
+  const code = await encodeProtectedSetupCode(peer, passphrase);
+  assert.equal(isProtectedSetupCode(code), true);
+  assert.equal(validateProtectedSetupCode(code), true);
+  const envelopeText = new TextDecoder().decode(decodeBase64Url(code.slice(4)));
+  assert.equal(envelopeText.includes(peer.secret), false);
+  assert.equal(envelopeText.includes(peer.name), false);
+
+  const imported = await decodeProtectedSetupCode(code, passphrase);
+  assert.equal(imported.scheme, peer.scheme);
+  assert.equal(imported.secret, peer.secret);
+  assert.equal(imported.format, peer.format);
+  await assert.rejects(decodeProtectedSetupCode(code, "abandon abandon abandon abandon abandon abandon abandon abandon"), /incorrect|damaged/i);
+
+  const envelope = JSON.parse(envelopeText);
+  const ciphertext = decodeBase64Url(envelope.c);
+  ciphertext[0] ^= 1;
+  envelope.c = encodeBase64Url(ciphertext);
+  const tampered = `TC2-${encodeBase64Url(new TextEncoder().encode(JSON.stringify(envelope)))}`;
+  assert.equal(validateProtectedSetupCode(tampered), true, "structural validation alone cannot authenticate ciphertext");
+  await assert.rejects(decodeProtectedSetupCode(tampered, passphrase), /incorrect|damaged/i);
+
+  const fingerprint = await setupFingerprint(code);
+  assert.match(fingerprint, /^[0-9A-F]{4}(?:-[0-9A-F]{4}){2}$/);
+  assert.notEqual(await setupFingerprint(tampered), fingerprint);
+});
+
 test("blank setup context preserves normal mutual behavior", async () => {
   const { local, peer } = await createChannelPair({ name: "No context", context: "", scheme: "mutual", method: "hotp", format: "numeric", length: 6 });
   assert.equal(await generateMutualCode(local), await generateMutualCode(peer));
@@ -161,8 +200,8 @@ test("one-way phrases verify once and advance in lockstep", async () => {
   assert.equal(prover.remaining, verifier.remaining);
 });
 
-test("all one-way proof strengths from 4 through 8 words round-trip and verify", async (t) => {
-  for (const length of [4, 5, 6, 7, 8]) {
+test("all one-way proof strengths from 5 through 10 words round-trip and verify", async (t) => {
+  for (const length of [5, 6, 7, 8, 9, 10]) {
     await t.test(`${length} words`, async () => {
       const { local: prover, peer } = await createChannelPair({ name: "Range", context: "strength", scheme: "proof", role: "prove", total: 2, length });
       const verifier = decodeSetupCode(encodeSetupCode(peer));
@@ -172,6 +211,27 @@ test("all one-way proof strengths from 4 through 8 words round-trip and verify",
       assert.equal((await verifyProofPhrase(phrase, verifier, "strength")).valid, true);
     });
   }
+});
+
+test("four-word one-way proofs can no longer be created", async () => {
+  await assert.rejects(
+    createChannelPair({ name: "Too weak", context: "", scheme: "proof", role: "prove", total: 2, length: 4 }),
+    /between 5 and 10 words/i,
+  );
+
+  const legacyFourWordSetup = {
+    v: 5,
+    q: "proof",
+    n: "Legacy weak proof",
+    r: "verify",
+    z: encodeBase64Url(new Uint8Array(6)),
+    e: 2,
+    t: 2,
+    l: 4,
+    d: 1,
+  };
+  const code = `TC1-${encodeBase64Url(new TextEncoder().encode(JSON.stringify(legacyFourWordSetup)))}`;
+  assert.throws(() => decodeSetupCode(code), /damaged|unsupported/i);
 });
 
 test("a different proof context fails verification", async () => {

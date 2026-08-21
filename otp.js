@@ -5,9 +5,13 @@ export { WORDS };
 const BASE32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 const CROCKFORD_BASE32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 const DEFAULT_PROOF_WORDS = 6;
-const PROOF_WORD_LENGTHS = [4, 5, 6, 7, 8];
+const PROOF_WORD_LENGTHS = [5, 6, 7, 8, 9, 10];
 const CONTEXT_ITERATIONS = 600_000;
 const encoder = new TextEncoder();
+const SETUP_AAD = encoder.encode("TrustCodes/AuthenticatedSetup/v1");
+export const SETUP_KDF_ITERATIONS = 600_000;
+export const SETUP_PASSPHRASE_WORDS = 8;
+export const SETUP_FINGERPRINT_HEX_DIGITS = 12;
 const proofCaches = new WeakMap();
 const contextKeyCaches = new WeakMap();
 
@@ -179,7 +183,7 @@ function canonicalProofBytes(bytes, words) {
 export function wordsToBytes(phrase, expectedLength) {
   const parts = normalizeCode(phrase, "words").split(" ").filter(Boolean);
   const length = expectedLength ?? parts.length;
-  if (!PROOF_WORD_LENGTHS.includes(length)) throw new Error("Proof phrases must contain between 4 and 8 words.");
+  if (!PROOF_WORD_LENGTHS.includes(length)) throw new Error("Proof phrases must contain between 5 and 10 words.");
   if (parts.length !== length) throw new Error(`Enter all ${length} words.`);
   let value = 0n;
   for (const word of parts) {
@@ -309,6 +313,7 @@ export function clearProofCache(entry) {
 
 export async function generateProofPhrase(entry, context = entry.context || "") {
   if (entry.scheme !== "proof" || entry.role !== "prove") throw new Error("This entry cannot generate proofs.");
+  if (!PROOF_WORD_LENGTHS.includes(entry.length)) throw new Error("This proof phrase strength is no longer supported. Create a new channel with 5 to 10 words.");
   if (entry.remaining < 1) throw new Error("This proof chain is exhausted.");
   const values = await proofValues(entry, context);
   let value = values[entry.remaining - 1];
@@ -325,6 +330,7 @@ export function consumeProof(entry) {
 
 export async function verifyProofPhrase(phrase, entry, context = entry.context || "") {
   if (entry.scheme !== "proof" || entry.role !== "verify") throw new Error("This entry cannot verify proofs.");
+  if (!PROOF_WORD_LENGTHS.includes(entry.length)) throw new Error("This proof phrase strength is no longer supported. Create a new channel with 5 to 10 words.");
   if (entry.remaining < 1) return { valid: false, exhausted: true };
   const mode = proofContextMode(entry);
   let anchor = decodeBase64Url(entry.anchor);
@@ -366,7 +372,7 @@ export async function createChannelPair(config) {
   const total = Number(config.total) || 1000;
   if (!Number.isSafeInteger(total) || total < 1 || total > 5000) throw new Error("A proof chain must contain between 1 and 5,000 proofs.");
   const length = Number(config.length) || DEFAULT_PROOF_WORDS;
-  if (!PROOF_WORD_LENGTHS.includes(length)) throw new Error("A proof phrase must contain between 4 and 8 words.");
+  if (!PROOF_WORD_LENGTHS.includes(length)) throw new Error("A proof phrase must contain between 5 and 10 words.");
   const seed = canonicalProofBytes(crypto.getRandomValues(new Uint8Array(proofByteLength(length))), length);
   const anchor = await deriveChainValue(seed, total, "", length);
   const prover = { ...common, ...protection(), id: createId(), scheme: "proof", role: "prove", remaining: total, total, length };
@@ -386,6 +392,135 @@ function serializableEntry(entry) {
   return { v: wrapped ? 6 : 5, q: "proof", n: entry.name, ...(wrapped ? { w: 1, s: entry.contextSalt } : {}), r: entry.role, z: entry.role === "prove" ? entry.seed : entry.anchor, e: entry.remaining, t: entry.total, l: entry.length, d: 1 };
 }
 
+function entryFromSetupData(data) {
+  if (![3, 4, 5, 6].includes(data.v) || data.d !== 1 || !["mutual", "proof"].includes(data.q)) throw new Error();
+  if (data.v === 6 && (data.w !== 1 || decodeBase64Url(data.s).length !== 16)) throw new Error();
+  const protection = data.v === 6 ? { contextProtection: "pbkdf2-wrap", contextSalt: data.s } : {};
+  const common = { id: createId(), name: String(data.n || "Private channel").slice(0, 48), ...protection, scheme: data.q, dictionary: 1, persisted: false };
+  if (data.q === "mutual") {
+    if (!["totp", "hotp"].includes(data.m) || !["numeric", "base32", "words"].includes(data.f)) throw new Error();
+    const secret = decodeBase32(data.k);
+    if (secret.length < 16 || secret.length > 64) throw new Error();
+    const allowed = data.f === "words" ? PROOF_WORD_LENGTHS : [4, 6, 8, 10, 12, 16];
+    if (!allowed.includes(data.l)) throw new Error();
+    return { ...common, method: data.m, secret: data.k, period: 30, counter: Number.isSafeInteger(data.c) && data.c >= 0 ? data.c : 0, format: data.f, length: data.l };
+  }
+  if (!["prove", "verify"].includes(data.r) || !PROOF_WORD_LENGTHS.includes(data.l) || !Number.isSafeInteger(data.e) || data.e < 0 || !Number.isSafeInteger(data.t) || data.t < data.e || data.t < 1 || data.t > 5000) throw new Error();
+  const material = decodeBase64Url(data.z);
+  if (material.length !== proofByteLength(data.l)) throw new Error();
+  if (!safeEqualBytes(material, canonicalProofBytes(material, data.l))) throw new Error();
+  const legacyMode = data.v === 5 ? { proofContextMode: "mask" } : data.v < 5 ? { proofContextMode: "chain" } : {};
+  return { ...common, ...legacyMode, role: data.r, [data.r === "prove" ? "seed" : "anchor"]: data.z, remaining: data.e, total: data.t, length: data.l };
+}
+
+function setupPassphraseWords(passphrase) {
+  const words = normalizeCode(String(passphrase || ""), "words").split(" ").filter(Boolean);
+  if (words.length !== SETUP_PASSPHRASE_WORDS || words.some((word) => !WORDS.includes(word))) {
+    throw new Error("Enter the complete eight-word setup passphrase.");
+  }
+  return words;
+}
+
+async function deriveSetupKey(passphrase, salt) {
+  const passphraseBytes = encoder.encode(setupPassphraseWords(passphrase).join(" "));
+  try {
+    const material = await crypto.subtle.importKey("raw", passphraseBytes, "PBKDF2", false, ["deriveKey"]);
+    return crypto.subtle.deriveKey(
+      { name: "PBKDF2", hash: "SHA-256", salt, iterations: SETUP_KDF_ITERATIONS },
+      material,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["encrypt", "decrypt"],
+    );
+  } finally {
+    passphraseBytes.fill(0);
+  }
+}
+
+function protectedSetupEnvelope(input) {
+  const value = String(input || "").trim();
+  if (!value.startsWith("TC2-")) throw new Error();
+  if (value.length > 20_000) throw new Error();
+  const envelope = JSON.parse(new TextDecoder().decode(decodeBase64Url(value.slice(4))));
+  if (envelope?.v !== 1 || envelope.k !== "PBKDF2-HMAC-SHA256" || envelope.i !== SETUP_KDF_ITERATIONS) throw new Error();
+  if (decodeBase64Url(envelope.s).length !== 16 || decodeBase64Url(envelope.n).length !== 12) throw new Error();
+  const ciphertext = decodeBase64Url(envelope.c);
+  if (ciphertext.length < 17 || ciphertext.length > 15_000) throw new Error();
+  return { value, envelope, ciphertext };
+}
+
+export function generateSetupPassphrase() {
+  const random = crypto.getRandomValues(new Uint32Array(SETUP_PASSPHRASE_WORDS));
+  return Array.from(random, (value) => WORDS[value & 2047]).join(" ");
+}
+
+export function isProtectedSetupCode(input) {
+  return String(input || "").trim().startsWith("TC2-");
+}
+
+export function validateProtectedSetupCode(input) {
+  try {
+    protectedSetupEnvelope(input);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function encodeProtectedSetupCode(entry, passphrase) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await deriveSetupKey(passphrase, salt);
+  const plaintext = encoder.encode(JSON.stringify(serializableEntry(entry)));
+  try {
+    const ciphertext = new Uint8Array(await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv, additionalData: SETUP_AAD },
+      key,
+      plaintext,
+    ));
+    const envelope = {
+      v: 1,
+      k: "PBKDF2-HMAC-SHA256",
+      i: SETUP_KDF_ITERATIONS,
+      s: encodeBase64Url(salt),
+      n: encodeBase64Url(iv),
+      c: encodeBase64Url(ciphertext),
+    };
+    return `TC2-${encodeBase64Url(encoder.encode(JSON.stringify(envelope)))}`;
+  } finally {
+    plaintext.fill(0);
+  }
+}
+
+export async function decodeProtectedSetupCode(input, passphrase) {
+  try {
+    const { envelope, ciphertext } = protectedSetupEnvelope(input);
+    const key = await deriveSetupKey(passphrase, decodeBase64Url(envelope.s));
+    const plaintext = new Uint8Array(await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: decodeBase64Url(envelope.n), additionalData: SETUP_AAD },
+      key,
+      ciphertext,
+    ));
+    try {
+      return entryFromSetupData(JSON.parse(new TextDecoder().decode(plaintext)));
+    } finally {
+      plaintext.fill(0);
+    }
+  } catch {
+    throw new Error("The setup passphrase is incorrect, or the setup code is damaged or unsupported.");
+  }
+}
+
+export async function setupFingerprint(input) {
+  const value = String(input || "").trim();
+  if (value.length > 20_000 || (!value.startsWith("TC1-") && !value.startsWith("TC2-"))) {
+    throw new Error("That setup code is damaged or unsupported.");
+  }
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", encoder.encode(value)));
+  const hex = Array.from(digest.slice(0, SETUP_FINGERPRINT_HEX_DIGITS / 2), (byte) => byte.toString(16).padStart(2, "0")).join("").toUpperCase();
+  return hex.match(/.{4}/g).join("-");
+}
+
 export function encodeSetupCode(entry) {
   return `TC1-${encodeBase64Url(encoder.encode(JSON.stringify(serializableEntry(entry))))}`;
 }
@@ -396,24 +531,7 @@ export function decodeSetupCode(input) {
   if (value.length > 20_000) throw new Error("That setup code is too large.");
   try {
     const data = JSON.parse(new TextDecoder().decode(decodeBase64Url(value.slice(4))));
-    if (![3, 4, 5, 6].includes(data.v) || data.d !== 1 || !["mutual", "proof"].includes(data.q)) throw new Error();
-    if (data.v === 6 && (data.w !== 1 || decodeBase64Url(data.s).length !== 16)) throw new Error();
-    const protection = data.v === 6 ? { contextProtection: "pbkdf2-wrap", contextSalt: data.s } : {};
-    const common = { id: createId(), name: String(data.n || "Private channel").slice(0, 48), ...protection, scheme: data.q, dictionary: 1, persisted: false };
-    if (data.q === "mutual") {
-      if (!["totp", "hotp"].includes(data.m) || !["numeric", "base32", "words"].includes(data.f)) throw new Error();
-      const secret = decodeBase32(data.k);
-      if (secret.length < 16 || secret.length > 64) throw new Error();
-      const allowed = data.f === "words" ? PROOF_WORD_LENGTHS : [4, 6, 8, 10, 12, 16];
-      if (!allowed.includes(data.l)) throw new Error();
-      return { ...common, method: data.m, secret: data.k, period: 30, counter: Number.isSafeInteger(data.c) && data.c >= 0 ? data.c : 0, format: data.f, length: data.l };
-    }
-    if (!["prove", "verify"].includes(data.r) || !PROOF_WORD_LENGTHS.includes(data.l) || !Number.isSafeInteger(data.e) || data.e < 0 || !Number.isSafeInteger(data.t) || data.t < data.e || data.t < 1 || data.t > 5000) throw new Error();
-    const material = decodeBase64Url(data.z);
-    if (material.length !== proofByteLength(data.l)) throw new Error();
-    if (!safeEqualBytes(material, canonicalProofBytes(material, data.l))) throw new Error();
-    const legacyMode = data.v === 5 ? { proofContextMode: "mask" } : data.v < 5 ? { proofContextMode: "chain" } : {};
-    return { ...common, ...legacyMode, role: data.r, [data.r === "prove" ? "seed" : "anchor"]: data.z, remaining: data.e, total: data.t, length: data.l };
+    return entryFromSetupData(data);
   } catch {
     throw new Error("That setup code is damaged, incomplete, or unsupported.");
   }

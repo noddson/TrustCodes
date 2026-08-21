@@ -2,12 +2,17 @@ import {
   clearProofCache,
   consumeProof,
   createChannelPair,
+  decodeProtectedSetupCode,
   decodeSetupCode,
-  encodeSetupCode,
+  encodeProtectedSetupCode,
+  generateSetupPassphrase,
   generateMutualCode,
   generateProofPhrase,
+  isProtectedSetupCode,
   normalizeCode,
   permutationCount,
+  setupFingerprint,
+  validateProtectedSetupCode,
   verifyProofPhrase,
 } from "./otp.js";
 import { drawQrCode } from "./qr.js";
@@ -29,8 +34,8 @@ const el = {
   setupStart: $("#setup-start"), importView: $("#import-view"), shareView: $("#share-view"),
   name: $("#channel-name"), context: $("#channel-context"), format: $("#code-format"), length: $("#code-length"),
   formatHelp: $("#format-help"), strengthRating: $("#strength-rating"), mutualSettings: $("#mutual-settings"), proofSettings: $("#proof-settings"),
-  proofTotal: $("#proof-total"), proofWords: $("#proof-words"), proofStrengthDetails: $("#proof-strength-details"), showImport: $("#show-import"), importCode: $("#import-code"), setupCode: $("#setup-code"),
-  shareInstruction: $("#share-instruction"), setupQrPanel: $("#setup-qr-panel"), setupQr: $("#setup-qr"), showSetupQr: $("#show-setup-qr"),
+  proofTotal: $("#proof-total"), proofWords: $("#proof-words"), proofStrengthDetails: $("#proof-strength-details"), showImport: $("#show-import"), importCode: $("#import-code"), importSetupPassphrase: $("#import-setup-passphrase"), setupCode: $("#setup-code"),
+  shareInstruction: $("#share-instruction"), setupPassphrase: $("#setup-passphrase"), setupFingerprint: $("#setup-fingerprint"), setupQrPanel: $("#setup-qr-panel"), setupQr: $("#setup-qr"), showSetupQr: $("#show-setup-qr"),
   startScanner: $("#start-scanner"), stopScanner: $("#stop-scanner"), scannerView: $("#scanner-view"), scannerVideo: $("#scanner-video"), scannerCanvas: $("#scanner-canvas"), scannerStatus: $("#scanner-status"),
   saveChannel: $("#save-channel"), saveImport: $("#save-import"), saveHelp: $("#save-help"), error: $("#setup-error"),
   empty: $("#empty-state"), workspace: $("#code-workspace"), select: $("#channel-select"), schemeBadge: $("#scheme-badge"), methodBadge: $("#method-badge"), useContext: $("#use-context"), contextStatus: $("#context-status"),
@@ -43,6 +48,8 @@ const el = {
   vaultDeviceOption: $("#vault-device-option"), vaultDeviceUnlock: $("#vault-device-unlock"), vaultDeviceSubmit: $("#vault-device-submit"), vaultUnlockDivider: $("#vault-unlock-divider"),
   contextConfirmDialog: $("#context-confirm-dialog"), contextConfirmForm: $("#context-confirm-form"), contextConfirm: $("#context-confirm"),
   contextConfirmSubmit: $("#context-confirm-submit"), contextConfirmError: $("#context-confirm-error"),
+  setupFingerprintDialog: $("#setup-fingerprint-dialog"), setupFingerprintForm: $("#setup-fingerprint-form"), importSetupFingerprint: $("#import-setup-fingerprint"),
+  setupFingerprintConfirmed: $("#setup-fingerprint-confirmed"), setupFingerprintSubmit: $("#setup-fingerprint-submit"),
   simpleMode: $("#simple-mode"), simpleEnter: $("#simple-mode-enter"), simpleExit: $("#simple-mode-exit"),
   simplePhotoButton: $("#simple-photo-button"), simplePhoto: $("#simple-photo"), simplePhotoInitials: $("#simple-photo-initials"),
   simpleName: $("#simple-person-name"), simplePrompt: $("#simple-prompt"), simplePeopleList: $("#simple-people-list"),
@@ -80,6 +87,7 @@ let toastTimer;
 let contextTimer;
 let cameraScanner = null;
 let pendingCreateConfig = null;
+let pendingImportEntry = null;
 let simpleModeRequested = readSimpleModePreference();
 let simpleRenderedId = null;
 const googleDriveBackup = new GoogleDriveVaultBackup({ clientId: GOOGLE_DRIVE_CLIENT_ID });
@@ -153,7 +161,11 @@ function scannerInstance() {
         el.scannerStatus.textContent = "A QR code was found, but it is not a TrustCodes setup code.";
         return false;
       }
-      try { decodeSetupCode(setupCode); }
+      try {
+        if (isProtectedSetupCode(setupCode)) {
+          if (!validateProtectedSetupCode(setupCode)) throw new Error();
+        } else decodeSetupCode(setupCode);
+      }
       catch {
         el.scannerStatus.textContent = "That TrustCodes QR code is damaged or unsupported.";
         return false;
@@ -176,6 +188,7 @@ function escapeHtml(value) {
 
 function switchTab(name) {
   if (name !== "setup") stopCameraScanner();
+  if (name !== "setup" && !el.shareView.hidden) resetSetupViews();
   if (name !== "use" || $('[data-panel="use"]').hidden) clearActiveContext();
   $$('[data-panel]').forEach((panel) => { panel.hidden = panel.dataset.panel !== name; });
   $$('[data-tab]').forEach((tab) => tab.classList.toggle("is-active", tab.dataset.tab === name));
@@ -186,9 +199,20 @@ function resetSetupViews() {
   stopCameraScanner();
   hideSetupQr();
   el.setupCode.textContent = "";
+  el.setupPassphrase.textContent = "";
+  el.setupFingerprint.textContent = "";
+  el.importCode.value = "";
+  el.importSetupPassphrase.value = "";
   pendingLocal = null; pendingPeer = null;
   el.setupStart.hidden = false; el.importView.hidden = true; el.shareView.hidden = true;
   clearError();
+}
+
+function resetFingerprintConfirmation() {
+  pendingImportEntry = null;
+  el.importSetupFingerprint.textContent = "";
+  el.setupFingerprintConfirmed.checked = false;
+  el.setupFingerprintSubmit.disabled = true;
 }
 
 function entropyBits(format, length) {
@@ -207,6 +231,10 @@ function assuranceLabel(bits) {
   if (bits < 77) return "Great";
   if (bits < 88) return "Excellent";
   return "Fantastic";
+}
+
+function proofAssuranceLabel(words) {
+  return ({ 5: "OK", 6: "Good", 7: "Great", 8: "Excellent", 9: "Fantastic", 10: "Legendary" })[words] || "Unsupported";
 }
 
 function conciseNumber(value) {
@@ -235,7 +263,8 @@ function strengthRatingMarkup(format, length, proof = false) {
     ? "This offline model matters if the verifier anchor is exposed; it does not determine whether the request is safe. Actual attacks vary."
     : "This does not estimate recovery of the shared secret: a displayed mutual code does not provide an offline correctness test or determine whether the request is safe. Actual attacks vary.";
   const details = `${permutations.toLocaleString("en-US")} possible ${noun}. At 20 billion trials/second: ${formatDuration(exhaustiveSeconds / 2)} on average, or ${formatDuration(exhaustiveSeconds)} to exhaust every possibility. ${relevance}`;
-  return `<details class="strength-disclosure"><summary><strong>${assuranceLabel(bits)}</strong><span class="rating-bits">~${bits} bits raw guess space</span></summary><p>${details} Learn more here: <a href="https://en.wikipedia.org/wiki/Phishing" target="_blank" rel="noopener noreferrer">Phishing</a>.</p></details>`;
+  const label = proof ? proofAssuranceLabel(length) : assuranceLabel(bits);
+  return `<details class="strength-disclosure"><summary><strong>${label}</strong><span class="rating-bits">~${bits} bits raw guess space</span></summary><p>${details} Learn more here: <a href="https://en.wikipedia.org/wiki/Phishing" target="_blank" rel="noopener noreferrer">Phishing</a>.</p></details>`;
 }
 
 function updateProofStrengthDetails() {
@@ -305,17 +334,22 @@ function addEntry(entry) {
   savePersisted();
 }
 
-function presentForSharing(local, peer) {
+async function presentForSharing(local, peer) {
+  const passphrase = generateSetupPassphrase();
+  const setupCode = await encodeProtectedSetupCode(peer, passphrase);
+  const fingerprint = await setupFingerprint(setupCode);
   stopCameraScanner();
   hideSetupQr();
   pendingLocal = local; pendingPeer = peer;
   el.context.value = "";
   el.setupStart.hidden = true; el.importView.hidden = true; el.shareView.hidden = false;
-  el.setupCode.textContent = encodeSetupCode(peer);
-  const contextReminder = " The context itself is not in this setup code; tell them the remembered value separately, or tell them to leave it empty if you created the channel without one.";
-  if (local.scheme === "mutual") el.shareInstruction.textContent = `Their setup contains independently salted, context-wrapped shared-secret material. Transfer it through a trusted method.${contextReminder}`;
-  else if (local.role === "prove") el.shareInstruction.textContent = `Their setup contains only an independently salted, context-wrapped hash-chain anchor. It cannot generate future phrases.${contextReminder}`;
-  else el.shareInstruction.textContent = `Their setup contains an independently salted, context-wrapped chain seed, making their device the prover. Transfer it through a trusted method and do not retain extra copies.${contextReminder}`;
+  el.setupCode.textContent = setupCode;
+  el.setupPassphrase.textContent = passphrase;
+  el.setupFingerprint.textContent = fingerprint;
+  const contextReminder = " The optional per-use context is separate and is never included in the setup package.";
+  if (local.scheme === "mutual") el.shareInstruction.textContent = `Send the encrypted setup code and eight-word passphrase through separate methods, then compare the short setup fingerprint.${contextReminder}`;
+  else if (local.role === "prove") el.shareInstruction.textContent = `The encrypted setup contains the verifier anchor, not the seed. Send its code and passphrase separately, then compare fingerprints.${contextReminder}`;
+  else el.shareInstruction.textContent = `The encrypted setup makes their device the prover. Send its code and passphrase separately, compare fingerprints, and do not retain extra copies.${contextReminder}`;
   clearError();
 }
 
@@ -450,7 +484,7 @@ function renderWorkspace() {
     el.generateLabel.textContent = "One-way proof";
     el.generateHeading.textContent = "Current proof phrase";
     el.generatePrompt.textContent = `Read this ${entry.length}-word phrase once. Consume it only after the verifier reports a match.`;
-    el.verifyPrompt.textContent = `Ask for their current ${entry.length}-word phrase. A successful proof is consumed immediately.`;
+    el.verifyPrompt.textContent = `Ask for their current ${entry.length}-word phrase. Success advances only this verifier's local state.`;
     el.verifyInput.placeholder = `${entry.length}-word proof phrase…`;
     el.remainingText.textContent = `${entry.remaining} of ${entry.total} proofs remaining`;
     el.verifyRemaining.textContent = `${entry.remaining} of ${entry.total} proofs remaining`;
@@ -905,7 +939,7 @@ async function createConfiguredChannel(config) {
   try {
     const pair = await createChannelPair(config);
     pair.local.persisted = el.saveChannel.checked && Boolean(vaultKey);
-    presentForSharing(pair.local, pair.peer);
+    await presentForSharing(pair.local, pair.peer);
   } catch (error) { showError(error.message); }
   finally { button.disabled = false; button.innerHTML = 'Create private channel <span aria-hidden="true">→</span>'; }
 }
@@ -960,15 +994,66 @@ el.contextConfirmForm.addEventListener("submit", async (event) => {
 el.showImport.addEventListener("click", () => { stopCameraScanner(); el.setupStart.hidden = true; el.importView.hidden = false; clearError(); el.importCode.focus(); });
 $("#cancel-import").addEventListener("click", resetSetupViews);
 $("#cancel-share").addEventListener("click", resetSetupViews);
-$("#import-channel").addEventListener("click", () => {
+$("#import-channel").addEventListener("click", async () => {
+  const button = $("#import-channel");
+  button.disabled = true;
+  button.textContent = "Checking setup…";
+  clearError();
   try {
-    const entry = decodeSetupCode(el.importCode.value);
+    const setupCode = el.importCode.value.trim();
+    if (isProtectedSetupCode(setupCode)) {
+      const entry = await decodeProtectedSetupCode(setupCode, el.importSetupPassphrase.value);
+      entry.persisted = el.saveImport.checked && Boolean(vaultKey);
+      pendingImportEntry = entry;
+      el.importSetupFingerprint.textContent = await setupFingerprint(setupCode);
+      el.importSetupPassphrase.value = "";
+      stopCameraScanner();
+      el.setupFingerprintConfirmed.checked = false;
+      el.setupFingerprintSubmit.disabled = true;
+      el.setupFingerprintDialog.showModal();
+      el.setupFingerprintConfirmed.focus();
+      return;
+    }
+    const entry = decodeSetupCode(setupCode);
     entry.persisted = el.saveImport.checked && Boolean(vaultKey);
-    stopCameraScanner(); addEntry(entry); el.importCode.value = ""; switchTab("use"); showToast("Trust channel imported");
+    stopCameraScanner(); addEntry(entry); el.importCode.value = ""; el.importSetupPassphrase.value = ""; switchTab("use"); showToast("Legacy unauthenticated trust channel imported");
   } catch (error) { showError(error.message); }
+  finally {
+    button.disabled = false;
+    button.textContent = "Import channel";
+  }
+});
+
+el.setupFingerprintConfirmed.addEventListener("change", () => {
+  el.setupFingerprintSubmit.disabled = !el.setupFingerprintConfirmed.checked;
+});
+$("#setup-fingerprint-cancel").addEventListener("click", () => {
+  resetFingerprintConfirmation();
+  el.importCode.value = "";
+  el.importSetupPassphrase.value = "";
+  el.setupFingerprintDialog.close();
+  el.importCode.focus();
+});
+el.setupFingerprintDialog.addEventListener("cancel", () => {
+  resetFingerprintConfirmation();
+  el.importCode.value = "";
+  el.importSetupPassphrase.value = "";
+});
+el.setupFingerprintForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  if (!pendingImportEntry || !el.setupFingerprintConfirmed.checked) return;
+  const entry = pendingImportEntry;
+  resetFingerprintConfirmation();
+  el.setupFingerprintDialog.close();
+  addEntry(entry);
+  el.importCode.value = "";
+  el.importSetupPassphrase.value = "";
+  switchTab("use");
+  showToast("Authenticated trust channel imported");
 });
 
 $("#copy-setup").addEventListener("click", () => copyText(el.setupCode.textContent, "Setup code copied"));
+$("#copy-setup-passphrase").addEventListener("click", () => copyText(el.setupPassphrase.textContent, "One-time setup passphrase copied"));
 el.showSetupQr.addEventListener("click", () => {
   try {
     drawQrCode(el.setupCode.textContent, el.setupQr);
@@ -990,7 +1075,7 @@ el.startScanner.addEventListener("click", async () => {
 el.stopScanner.addEventListener("click", () => stopCameraScanner());
 $("#finish-setup").addEventListener("click", () => {
   addEntry(pendingLocal); pendingLocal = null; pendingPeer = null;
-  hideSetupQr(); el.setupCode.textContent = ""; switchTab("use");
+  hideSetupQr(); el.setupCode.textContent = ""; el.setupPassphrase.textContent = ""; el.setupFingerprint.textContent = ""; switchTab("use");
 });
 el.useContext.addEventListener("input", () => {
   const entry = active();
@@ -1031,7 +1116,7 @@ el.verifyButton.addEventListener("click", async () => {
       el.verifyRemaining.textContent = `${entry.remaining} of ${entry.total} proofs remaining`;
       el.methodBadge.textContent = formatLabel(entry);
       el.verifyInput.value = "";
-      verificationResult(true, result.exhausted ? "Valid final proof—the chain is now exhausted." : "Valid one-way proof. It has been consumed and cannot be replayed.");
+      verificationResult(true, result.exhausted ? "Valid final proof. This verifier has reached the end of the chain." : "Valid one-way proof. This verifier has moved to the next proof.");
     } else verificationResult(false, "Invalid proof. Stop and reconnect through a contact method you trust.");
   } catch (error) { verificationResult(false, error.message); }
   finally { el.verifyButton.disabled = entry.remaining < 1; }
