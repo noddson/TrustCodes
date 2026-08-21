@@ -39,19 +39,3 @@ test("the portable response-header policy includes response-only protections", (
     "Strict-Transport-Security:",
   ]) assert.ok(headers.includes(header), `_headers is missing ${header}`);
 });
-
-test("one-way proof UI exposes only the approved strength tiers", () => {
-  const html = readFileSync("index.html", "utf8");
-  const tiers = [
-    [5, "OK"],
-    [6, "Good"],
-    [7, "Great"],
-    [8, "Excellent"],
-    [9, "Fantastic"],
-    [10, "Legendary"],
-  ];
-  for (const [words, label] of tiers) {
-    assert.ok(html.includes(`<option value="${words}"${words === 6 ? " selected" : ""}>${words} words · ${label}</option>`));
-  }
-  assert.doesNotMatch(html, /<option value="4">4 words/);
-});

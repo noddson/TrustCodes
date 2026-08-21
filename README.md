@@ -81,14 +81,30 @@ Access tokens are held only in page memory and are revoked when **Disconnect** i
 ## Trust models
 
 - Mutual HOTP/TOTP stores the same secret on both devices, so either device can generate the same code.
-- One-way proof gives the prover a private hash-chain seed and the verifier only the current anchor. An accepting verifier advances its own local anchor so that same state rejects the phrase afterward; this is not global replay prevention and can be undone by state rollback or replacement. New channels require 5 to 10 words: 5 (OK, 55 bits), 6 (Good, 66 bits), 7 (Great, 77 bits), 8 (Excellent, 88 bits), 9 (Fantastic, 99 bits), or 10 (Legendary, 110 bits). Four-word proofs and setup imports are rejected as too weak.
+- One-way proof gives the prover a private hash-chain seed and the verifier only the current anchor. An accepting verifier advances its own local anchor so that same state rejects the phrase afterward; this is not global replay prevention and can be undone by state rollback or replacement. New channels require 5 to 10 words: 5 (Good, 55 bits), 6 (Strong, 66 bits), 7 (Great, 77 bits), 8 (Excellent, 88 bits), 9 (Fantastic, 99 bits), or 10 (Legendary, 110 bits). Four-word proofs and setup imports are rejected as too weak.
 - The generated one-time setup passphrase authenticates and encrypts the initial setup package. It is separate from both the vault recovery passphrase and the optional per-use context. It confirms possession of the independently transferred setup passphrase, not a person's legal identity, and it cannot prevent real-time relay or compromise of both transfer methods.
 - Context is an optional shared secret fixed by the creator. PBKDF2-HMAC-SHA256 (600,000 rounds) combines it with a different random salt for each device and wraps that device's secret, seed, or anchor. The creator's input is then discarded. Setup codes and vault entries contain only the salt and wrapped material, never the context value.
 - Both people re-enter the context only while using the TrustCode. If both omit a configured context—or enter the same wrong value—the independently salted material produces unrelated codes or proofs. If the creator leaves context blank, the channel preserves normal context-free HOTP/TOTP or hash-chain behavior.
 - A context is closer to an additional secret than a public cryptographic salt. Use a strong, memorable value if relying on it: someone with setup material and an observed valid code may be able to test context guesses offline.
 - Human-facing letters-and-numbers codes use Crockford Base32 (`0123456789ABCDEFGHJKMNPQRSTVWXYZ`). Internal shared secrets continue to use RFC 4648 Base32. When normalizing entered codes, `O` is accepted as `0`, while `I` and `L` are accepted as `1`.
 
-Mutual-code strength labels compare the raw displayed guess space: Very weak (&lt;17 bits), Weak (17–21), Basic (22–32), Fair (33–43), Okay (44–54), Good (55–65), Great (66–76), Excellent (77–87), and Fantastic (88+). One-way proofs use the more conservative tiers listed above. These labels do not measure the entropy of the underlying shared secret or determine whether a request is safe.
+Mutual and one-way options use the same raw displayed-entropy classifications:
+
+| Entropy | Classification |
+| ------: | -------------- |
+| 110 bits | **Legendary** |
+| 99 bits | **Fantastic** |
+| 88 bits | **Excellent** |
+| 77 bits | **Great** |
+| 66 bits | **Strong** |
+| 55 bits | **Good** |
+| 44 bits | **OK** |
+| 33 bits | **Mediocre** |
+| 26 bits | **Poor** |
+| 19 bits | **Weak** |
+| 13 bits | **Very Weak** |
+
+For entropy values between listed anchors, the classification uses the greatest threshold the option meets. These labels do not measure the entropy of the underlying shared secret or determine whether a request is safe.
 
 The green details card beneath each strength selector gives the qualitative rating, exact number of possible values, and an illustrative average and exhaustive search time at 20 billion trials per second. This is a fixed high-end-GPU-class scenario, not a prediction. For one-way proofs, offline search is relevant if the verifier anchor is exposed. For mutual codes, enumerating the displayed code space does not recover the shared secret because an observed code does not provide an offline correctness test.
 

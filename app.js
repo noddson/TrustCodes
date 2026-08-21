@@ -23,10 +23,12 @@ import { GOOGLE_DRIVE_CLIENT_ID } from "./google-drive-config.js";
 import { createVaultBackupEnvelope, GoogleDriveVaultBackup } from "./google-drive.js";
 import { loadBuildVersion } from "./build-version.js";
 import { initialsForName, photoDataUrl, readSimpleModePreference, writeSimpleModePreference } from "./simple-mode.js";
+import { entropyBits, entropyClassification, strengthOptionLabel } from "./strength.js";
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 const LENGTHS = { numeric: [4, 6, 8, 10, 12, 16], base32: [4, 6, 8, 10, 12, 16], words: [4, 5, 6, 7, 8] };
+const PROOF_LENGTHS = [5, 6, 7, 8, 9, 10];
 const FORMAT_HELP = { numeric: "Familiar and easy to read aloud.", base32: "Crockford Base32 uses 0–9 and uppercase letters except I, L, O, and U. Typed O maps to 0; I or L maps to 1.", words: "Uses the complete 2,048-word BIP-39 dictionary." };
 const ESTIMATE_RATE = 20_000_000_000;
 
@@ -215,28 +217,6 @@ function resetFingerprintConfirmation() {
   el.setupFingerprintSubmit.disabled = true;
 }
 
-function entropyBits(format, length) {
-  if (format === "numeric") return Math.floor(length * Math.log2(10));
-  if (format === "base32") return length * 5;
-  return length * 11;
-}
-
-function assuranceLabel(bits) {
-  if (bits < 17) return "Very weak";
-  if (bits < 22) return "Weak";
-  if (bits < 33) return "Basic";
-  if (bits < 44) return "Fair";
-  if (bits < 55) return "Okay";
-  if (bits < 66) return "Good";
-  if (bits < 77) return "Great";
-  if (bits < 88) return "Excellent";
-  return "Fantastic";
-}
-
-function proofAssuranceLabel(words) {
-  return ({ 5: "OK", 6: "Good", 7: "Great", 8: "Excellent", 9: "Fantastic", 10: "Legendary" })[words] || "Unsupported";
-}
-
 function conciseNumber(value) {
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: value < 10 ? 2 : value < 100 ? 1 : 0 }).format(value);
 }
@@ -263,7 +243,7 @@ function strengthRatingMarkup(format, length, proof = false) {
     ? "This offline model matters if the verifier anchor is exposed; it does not determine whether the request is safe. Actual attacks vary."
     : "This does not estimate recovery of the shared secret: a displayed mutual code does not provide an offline correctness test or determine whether the request is safe. Actual attacks vary.";
   const details = `${permutations.toLocaleString("en-US")} possible ${noun}. At 20 billion trials/second: ${formatDuration(exhaustiveSeconds / 2)} on average, or ${formatDuration(exhaustiveSeconds)} to exhaust every possibility. ${relevance}`;
-  const label = proof ? proofAssuranceLabel(length) : assuranceLabel(bits);
+  const label = entropyClassification(bits);
   return `<details class="strength-disclosure"><summary><strong>${label}</strong><span class="rating-bits">~${bits} bits raw guess space</span></summary><p>${details} Learn more here: <a href="https://en.wikipedia.org/wiki/Phishing" target="_blank" rel="noopener noreferrer">Phishing</a>.</p></details>`;
 }
 
@@ -271,10 +251,19 @@ function updateProofStrengthDetails() {
   el.proofStrengthDetails.innerHTML = strengthRatingMarkup("words", Number(el.proofWords.value), true);
 }
 
+function updateProofStrengthOptions() {
+  const previous = Number(el.proofWords.value) || 6;
+  el.proofWords.innerHTML = PROOF_LENGTHS.map((length) => {
+    return `<option value="${length}">${strengthOptionLabel("words", length)}</option>`;
+  }).join("");
+  el.proofWords.value = String(PROOF_LENGTHS.includes(previous) ? previous : 6);
+  updateProofStrengthDetails();
+}
+
 function updateStrengthOptions() {
   const format = el.format.value, previous = Number(el.length.value);
   el.length.innerHTML = LENGTHS[format].map((length) => {
-    return `<option value="${length}">${format === "words" ? `${length} words` : `${length} characters`}</option>`;
+    return `<option value="${length}">${strengthOptionLabel(format, length)}</option>`;
   }).join("");
   el.length.value = String(LENGTHS[format].includes(previous) ? previous : 6);
   el.formatHelp.textContent = FORMAT_HELP[format];
@@ -1222,4 +1211,4 @@ el.vaultForm.addEventListener("submit", async (event) => {
 document.addEventListener("visibilitychange", () => { if (document.hidden) stopCameraScanner(); });
 window.addEventListener("pagehide", () => stopCameraScanner());
 
-updateStrengthOptions(); updateProofStrengthDetails(); updateScheme(); renderWorkspace(); initializeVault(); renderBuildVersion(); tick(); setInterval(tick, 250);
+updateStrengthOptions(); updateProofStrengthOptions(); updateScheme(); renderWorkspace(); initializeVault(); renderBuildVersion(); tick(); setInterval(tick, 250);
