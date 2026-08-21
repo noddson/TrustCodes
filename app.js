@@ -15,7 +15,7 @@ import { cameraErrorMessage, normalizeScannedSetupCode, QrCameraScanner } from "
 import { createDeviceUnlock, deviceUnlockSupported, getDeviceUnlock } from "./passkey.js";
 import { createVault, getVaultDevice, getVaultRecord, purgeVault, replaceVaultRecord, saveVault, unlockVault, unlockVaultWithDevice, updateVaultCredentials, validateVaultBackupRecord, vaultExists, vaultPassphraseProblem } from "./vault.js";
 import { GOOGLE_DRIVE_CLIENT_ID } from "./google-drive-config.js";
-import { createVaultBackupEnvelope, GoogleDriveVaultBackup } from "./google-drive.js?v=2";
+import { createVaultBackupEnvelope, GoogleDriveVaultBackup } from "./google-drive.js";
 import { loadBuildVersion } from "./build-version.js";
 import { initialsForName, photoDataUrl, readSimpleModePreference, writeSimpleModePreference } from "./simple-mode.js";
 
