@@ -16,6 +16,10 @@
     flex: none;
   }
 
+  .simple-header {
+    grid-template-columns: 1fr auto 1fr;
+  }
+
   .simple-main {
     min-height: 0;
     overflow-y: auto;
@@ -27,16 +31,48 @@
     padding-bottom: calc(14px + env(safe-area-inset-bottom));
   }
 
-  .simple-people-list {
-    justify-content: safe center;
-    flex-wrap: nowrap;
+  .simple-people-scroller {
+    width: 100%;
     overflow-x: auto;
     overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
     padding-bottom: 2px;
     scrollbar-width: thin;
   }
 
+  .simple-people-list {
+    width: max-content;
+    min-width: 100%;
+    justify-content: center;
+    flex-wrap: nowrap;
+  }
+
   .simple-person {
     flex: 0 0 98px;
+  }
+
+  .vault-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .vault-state {
+    flex: 1 1 135px;
+  }
+
+  .vault-state strong {
+    white-space: nowrap;
+  }
+
+  .vault-state small {
+    display: none;
+  }
+
+  .vault-actions {
+    width: auto;
+    flex: none;
+    margin-left: auto;
   }
 }
