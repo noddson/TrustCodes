@@ -29,6 +29,19 @@ function normalizeLeetspeak(value) {
   return value.replaceAll("0", "o").replaceAll("1", "i").replaceAll("3", "e").replaceAll("4", "a").replaceAll("5", "s").replaceAll("7", "t").replaceAll("8", "b");
 }
 
+function hasRepeatedWordPattern(value, compact) {
+  const words = value.normalize("NFKC").toLocaleLowerCase("en-US").match(/[\p{L}\p{N}]+/gu) || [];
+  if (words.length >= 3) {
+    for (let patternLength = 1; patternLength <= Math.floor(words.length / 3); patternLength += 1) {
+      if (words.every((word, index) => word === words[index % patternLength])) return true;
+    }
+    const counts = new Map();
+    for (const word of words) counts.set(word, (counts.get(word) || 0) + 1);
+    if (words.some((word) => word.length >= 3 && counts.get(word) >= 3)) return true;
+  }
+  return /^(.{1,32})\1{2,}$/.test(compact);
+}
+
 function predictablePasswordProblem(value) {
   const compact = compactForComparison(value);
   const leetspeak = normalizeLeetspeak(compact);
@@ -37,8 +50,8 @@ function predictablePasswordProblem(value) {
     || /^(password|passphrase|trustcodes?|welcome|letmein|changeme|admin(?:istrator)?|recovery(?:password)?)[a-z0-9]{0,12}$/.test(leetspeak)) {
     return "Choose a less predictable recovery password. Names, common words, and number suffixes are easy to guess.";
   }
-  if (/^(.)\1{7,}$/u.test(value) || /^(.{1,4})\1{3,}$/u.test(value)) {
-    return "Choose a recovery password without repeated characters or repeated short patterns.";
+  if (/^(.)\1{7,}$/u.test(value) || /^(.{1,4})\1{3,}$/u.test(value) || hasRepeatedWordPattern(value, compact)) {
+    return "Choose a recovery password without repeated characters, words, or phrases.";
   }
   if (["0123456789", "9876543210", "abcdefghijklmnopqrstuvwxyz", "zyxwvutsrqponmlkjihgfedcba", "qwertyuiop", "asdfghjkl", "zxcvbnm"].some((sequence) => compact.includes(sequence))) {
     return "Choose a recovery password without keyboard or sequential patterns.";

@@ -18,7 +18,7 @@ test("user-chosen recovery passwords require length but not composition", () => 
 });
 
 test("common, predictable, sequential, and repeated passwords remain a warned user choice", () => {
-  for (const password of ["Password123!!!!", "P@ssw0rd1234567", "TrustCodes2026!!!", "recovery-password-123", "abcabcabcabcabc", "0123456789012345"]) {
+  for (const password of ["Password123!!!!", "P@ssw0rd1234567", "TrustCodes2026!!!", "recovery-password-123", "abcabcabcabcabc", "0123456789012345", "password password password password password"]) {
     const assessment = assessVaultPassword(password);
     assert.equal(assessment.acceptable, true, password);
     assert.equal(assessment.label, "Weak", password);

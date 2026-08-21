@@ -578,11 +578,22 @@ function renderPasswordStrength(input, output) {
   output.className = `password-strength level-${assessment.level}`;
 }
 
+function renderVaultPasswordStrength() {
+  if (el.vaultDialog.dataset.mode !== "create") {
+    el.vaultPasswordStrength.hidden = true;
+    el.vaultPasswordStrength.textContent = "";
+    el.vaultPasswordStrength.className = "password-strength";
+    return;
+  }
+  renderPasswordStrength(el.vaultPassphrase, el.vaultPasswordStrength);
+}
+
 function setVaultRecoveryInputMode() {
-  const generated = el.vaultDialog.dataset.mode === "create" && el.vaultDeviceUnlock.checked;
+  const creating = el.vaultDialog.dataset.mode === "create";
+  const generated = creating && el.vaultDeviceUnlock.checked;
   el.vaultPasswordField.hidden = generated;
-  el.vaultConfirmField.hidden = generated || el.vaultDialog.dataset.mode !== "create";
-  el.vaultPasswordStrength.hidden = generated || !el.vaultPassphrase.value;
+  el.vaultConfirmField.hidden = generated || !creating;
+  el.vaultPasswordStrength.hidden = !creating || generated || !el.vaultPassphrase.value;
   el.vaultGeneratedRecoveryNote.hidden = !generated;
   el.vaultPassphrase.required = !generated;
   el.vaultConfirm.required = !generated && el.vaultDialog.dataset.mode === "create";
@@ -714,6 +725,9 @@ function openVaultDialog() {
     : vaultDevice
       ? "Unlock with this device, or use the recovery password or code."
       : "Your recovery password unlocks the encrypted entries saved in this browser context.";
+  el.vaultPasswordHelp.textContent = creating
+    ? "For a new vault, use at least 8 characters. Weak and common values are allowed with a warning; a long, unique password is strongly recommended."
+    : "Enter the recovery password or generated recovery code for this vault.";
   el.vaultConfirmField.hidden = !creating;
   el.vaultConfirm.required = creating;
   el.vaultPassphrase.minLength = creating ? 8 : 1;
@@ -725,7 +739,7 @@ function openVaultDialog() {
   el.vaultUnlockDivider.hidden = el.vaultDeviceSubmit.hidden;
   el.vaultSubmit.textContent = creating ? "Create encrypted vault" : "Unlock vault";
   clearVaultCredentialInputs();
-  renderPasswordStrength(el.vaultPassphrase, el.vaultPasswordStrength);
+  renderVaultPasswordStrength();
   setVaultRecoveryInputMode();
   el.vaultError.hidden = true;
   el.vaultDialog.showModal();
@@ -1426,7 +1440,7 @@ $("#vault-cancel").addEventListener("click", () => { openVaultOptionsAfterUnlock
 el.vaultDialog.addEventListener("cancel", () => { openVaultOptionsAfterUnlock = false; });
 el.vaultDialog.addEventListener("close", clearVaultCredentialInputs);
 el.changePasswordDialog.addEventListener("close", clearVaultCredentialInputs);
-el.vaultPassphrase.addEventListener("input", () => renderPasswordStrength(el.vaultPassphrase, el.vaultPasswordStrength));
+el.vaultPassphrase.addEventListener("input", renderVaultPasswordStrength);
 el.vaultDeviceUnlock.addEventListener("change", setVaultRecoveryInputMode);
 el.recoveryCodeSaved.addEventListener("change", () => { el.recoveryCodeClose.disabled = !el.recoveryCodeSaved.checked; });
 el.recoveryCodeDialog.addEventListener("cancel", (event) => event.preventDefault());
