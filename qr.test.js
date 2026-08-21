@@ -17,7 +17,7 @@ test("QR generation rejects empty or oversized values", () => {
   assert.throws(() => createQrMatrix("X".repeat(20_001)), /cannot be represented/i);
 });
 
-test("the scanner accepts only bounded Trust Codes setup payloads", () => {
+test("the scanner accepts only bounded TrustCodes setup payloads", () => {
   assert.equal(normalizeScannedSetupCode("  TC1-abc123  "), "TC1-abc123");
   assert.equal(normalizeScannedSetupCode("https://example.com"), "");
   assert.equal(normalizeScannedSetupCode(`TC1-${"a".repeat(20_000)}`), "");

@@ -69,7 +69,7 @@ export class QrCameraScanner {
       this.detector = await nativeDetector();
       if (!this.detector) this.decoder = await localDecoder();
       this.active = true;
-      this.onStatus("Camera on · point it at a Trust Codes QR code");
+      this.onStatus("Camera on · point it at a TrustCodes QR code");
       this.frameRequest = requestAnimationFrame((time) => this.scan(time));
     } catch (error) {
       this.stop();

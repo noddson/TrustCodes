@@ -184,7 +184,7 @@ export function wordsToBytes(phrase, expectedLength) {
   let value = 0n;
   for (const word of parts) {
     const index = WORDS.indexOf(word);
-    if (index < 0) throw new Error(`“${word}” is not in the Trust Codes dictionary.`);
+    if (index < 0) throw new Error(`“${word}” is not in the TrustCodes dictionary.`);
     value = (value << 11n) | BigInt(index);
   }
   const bytes = new Uint8Array(proofByteLength(length));
@@ -392,7 +392,7 @@ export function encodeSetupCode(entry) {
 
 export function decodeSetupCode(input) {
   const value = input.trim();
-  if (!value.startsWith("TC1-")) throw new Error("A Trust Codes setup code begins with TC1-.");
+  if (!value.startsWith("TC1-")) throw new Error("A TrustCodes setup code begins with TC1-.");
   if (value.length > 20_000) throw new Error("That setup code is too large.");
   try {
     const data = JSON.parse(new TextDecoder().decode(decodeBase64Url(value.slice(4))));

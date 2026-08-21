@@ -1,6 +1,6 @@
 # Third-party notices
 
-Trust Codes vendors the following browser-side QR components so setup codes and camera frames can remain local and the feature can work after the page has loaded.
+TrustCodes vendors the following browser-side QR components so setup codes and camera frames can remain local and the feature can work after the page has loaded.
 
 ## qrcode-generator 2.0.4
 

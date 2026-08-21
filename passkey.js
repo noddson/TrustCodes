@@ -1,6 +1,6 @@
 import { decodeBase64Url, encodeBase64Url } from "./otp.js";
 
-const DEVICE_UNLOCK_NAME = "Trust Codes vault";
+const DEVICE_UNLOCK_NAME = "TrustCodes vault";
 
 function randomBytes(length = 32) {
   return crypto.getRandomValues(new Uint8Array(length));
@@ -13,8 +13,8 @@ function prfResult(credential) {
 
 function deviceUnlockError(error) {
   if (error?.name === "NotAllowedError") return new Error("Device unlock was cancelled or timed out.");
-  if (error?.name === "SecurityError") return new Error("Device unlock requires this secure Trust Codes address.");
-  if (error?.name === "InvalidStateError") return new Error("This device already has a conflicting Trust Codes passkey.");
+  if (error?.name === "SecurityError") return new Error("Device unlock requires this secure TrustCodes address.");
+  if (error?.name === "InvalidStateError") return new Error("This device already has a conflicting TrustCodes passkey.");
   return new Error("This passkey provider does not support the WebAuthn PRF device-unlock feature.");
 }
 
@@ -60,7 +60,7 @@ export async function createDeviceUnlock(credentials = navigator.credentials) {
     const credential = await credentials.create({
       publicKey: {
         challenge: randomBytes(),
-        rp: { name: "Trust Codes" },
+        rp: { name: "TrustCodes" },
         user: {
           id: randomBytes(),
           name: `local-vault-${encodeBase64Url(randomBytes(9))}`,

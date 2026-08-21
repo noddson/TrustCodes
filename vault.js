@@ -4,11 +4,95 @@ const DB_NAME = "trust-codes-vault";
 const STORE_NAME = "vault";
 const RECORD_ID = "primary";
 export const VAULT_ITERATIONS = 600_000;
+export const VAULT_PASSWORD_MIN_LENGTH = 12;
+export const VAULT_PASSWORD_MAX_LENGTH = 64;
 const AAD_V1 = new TextEncoder().encode("TrustCodesVault/v1");
 const AAD_V2 = new TextEncoder().encode("TrustCodesVault/v2");
 const PASSWORD_WRAP_AAD = new TextEncoder().encode("TrustCodesVault/password-wrap/v1");
 const DEVICE_WRAP_AAD = new TextEncoder().encode("TrustCodesVault/device-wrap/v1");
 const DEVICE_KDF_INFO = new TextEncoder().encode("TrustCodesVault/WebAuthn-PRF/v1");
+const MAX_VAULT_CIPHERTEXT_CHARACTERS = 24 * 1024 * 1024;
+
+export function vaultPassphraseProblem(passphrase) {
+  const value = String(passphrase || "").normalize("NFC");
+  const length = [...value].length;
+  if (length < VAULT_PASSWORD_MIN_LENGTH) return `Use at least ${VAULT_PASSWORD_MIN_LENGTH} characters.`;
+  if (length > VAULT_PASSWORD_MAX_LENGTH) return `Use no more than ${VAULT_PASSWORD_MAX_LENGTH} characters.`;
+  if (!/\p{Lu}/u.test(value)) return "Include at least one uppercase letter.";
+  if (!/\p{Ll}/u.test(value)) return "Include at least one lowercase letter.";
+  if (!/\p{N}/u.test(value)) return "Include at least one number.";
+  if (!/[^\p{L}\p{N}\s]/u.test(value)) return "Include at least one symbol, such as !, @, #, $, %, or &.";
+  return "";
+}
+
+function requireStrongVaultPassphrase(passphrase) {
+  const problem = vaultPassphraseProblem(passphrase);
+  if (problem) throw new Error(`The vault passphrase is not strong enough. ${problem}`);
+}
+
+function checkedBase64Url(value, label, expectedBytes = null, maximumCharacters = 4096) {
+  if (typeof value !== "string" || !value || value.length > maximumCharacters || !/^[A-Za-z0-9_-]+$/.test(value)) {
+    throw new Error(`The backup has an invalid ${label}.`);
+  }
+  let bytes;
+  try { bytes = decodeBase64Url(value); }
+  catch { throw new Error(`The backup has an invalid ${label}.`); }
+  if (expectedBytes !== null && bytes.byteLength !== expectedBytes) throw new Error(`The backup has an invalid ${label}.`);
+  return value;
+}
+
+function checkedWrappedKey(value, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`The backup has an invalid ${label}.`);
+  return {
+    iv: checkedBase64Url(value.iv, `${label} IV`, 12),
+    ciphertext: checkedBase64Url(value.ciphertext, `${label} ciphertext`, 48),
+  };
+}
+
+/** Validate and copy only the encrypted fields TrustCodes understands. */
+export function validateVaultBackupRecord(record) {
+  if (!record || typeof record !== "object" || Array.isArray(record) || record.id !== RECORD_ID) {
+    throw new Error("The backup does not contain a TrustCodes encrypted vault.");
+  }
+  const encrypted = {
+    iv: checkedBase64Url(record.iv, "vault IV", 12),
+    ciphertext: checkedBase64Url(record.ciphertext, "vault ciphertext", null, MAX_VAULT_CIPHERTEXT_CHARACTERS),
+  };
+  if (record.version === 1) {
+    if (!supportedV1(record) || record.cipher !== undefined) throw new Error("The backup uses an unsupported vault format.");
+    return {
+      id: RECORD_ID,
+      version: 1,
+      kdf: "PBKDF2-HMAC-SHA256",
+      iterations: VAULT_ITERATIONS,
+      salt: checkedBase64Url(record.salt, "passphrase salt", 16),
+      ...encrypted,
+    };
+  }
+  if (!supportedV2(record) || record.cipher !== "AES-256-GCM") throw new Error("The backup uses an unsupported vault format.");
+  const password = {
+    kdf: "PBKDF2-HMAC-SHA256",
+    iterations: VAULT_ITERATIONS,
+    salt: checkedBase64Url(record.password.salt, "passphrase salt", 16),
+    wrappedKey: checkedWrappedKey(record.password.wrappedKey, "passphrase-wrapped key"),
+  };
+  let device;
+  if (record.device !== undefined) {
+    if (!record.device || record.device.type !== "webauthn-prf"
+      || typeof record.device.credentialId !== "string" || !record.device.credentialId || record.device.credentialId.length > 4096
+      || typeof record.device.prfInput !== "string" || !record.device.prfInput || record.device.prfInput.length > 4096) {
+      throw new Error("The backup has invalid device-unlock metadata.");
+    }
+    device = {
+      type: "webauthn-prf",
+      credentialId: record.device.credentialId,
+      prfInput: record.device.prfInput,
+      hkdfSalt: checkedBase64Url(record.device.hkdfSalt, "device-unlock salt", 16),
+      wrappedKey: checkedWrappedKey(record.device.wrappedKey, "device-wrapped key"),
+    };
+  }
+  return { id: RECORD_ID, version: 2, cipher: "AES-256-GCM", password, ...(device ? { device } : {}), ...encrypted };
+}
 
 function openDatabase() {
   return new Promise((resolve, reject) => {
@@ -47,6 +131,12 @@ export async function vaultExists() {
 
 export async function purgeVault() {
   await withStore("readwrite", (store) => store.delete(RECORD_ID));
+}
+
+export async function replaceVaultRecord(record) {
+  const validated = validateVaultBackupRecord(record);
+  await withStore("readwrite", (store) => store.put(validated));
+  return validated;
 }
 
 export async function getVaultDevice() {
@@ -117,7 +207,7 @@ export async function decryptVaultEntries(record, key, additionalData = AAD_V1) 
     if (!Array.isArray(entries)) throw new Error();
     return entries;
   } catch {
-    throw new Error("The vault password or device unlock is incorrect, or the vault data is damaged.");
+    throw new Error("The vault passphrase or device unlock is incorrect, or the vault data is damaged.");
   }
 }
 
@@ -177,6 +267,7 @@ async function makeV2Record(passphrase, entries, deviceAccess = null) {
 }
 
 export async function createVault(passphrase, entries = [], deviceAccess = null) {
+  requireStrongVaultPassphrase(passphrase);
   const next = await makeV2Record(passphrase, entries, deviceAccess);
   await withStore("readwrite", (store) => store.put(next.record));
   return next.key;
@@ -196,7 +287,7 @@ export async function unlockVault(passphrase) {
     rawDataKey.fill(0);
     return { key, entries: await decryptEntriesForRecord(record, key) };
   } catch {
-    throw new Error("The vault password is incorrect or the vault data is damaged.");
+    throw new Error("The vault passphrase is incorrect or the vault data is damaged.");
   }
 }
 
@@ -213,11 +304,12 @@ export async function unlockVaultWithDevice(deviceAccess) {
     rawDataKey.fill(0);
     return { key, entries: await decryptEntriesForRecord(record, key) };
   } catch {
-    throw new Error("Device unlock could not decrypt this vault. Use the recovery password instead.");
+    throw new Error("Device unlock could not decrypt this vault. Use the recovery passphrase instead.");
   }
 }
 
 export async function updateVaultCredentials(currentKey, newPassphrase, entries, deviceAccess = null) {
+  requireStrongVaultPassphrase(newPassphrase);
   const record = await getVaultRecord();
   if (!record || (!supportedV1(record) && !supportedV2(record))) throw new Error("No supported encrypted vault was found.");
   await decryptEntriesForRecord(record, currentKey);

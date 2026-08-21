@@ -13,7 +13,9 @@ import {
 import { drawQrCode } from "./qr.js";
 import { cameraErrorMessage, normalizeScannedSetupCode, QrCameraScanner } from "./qr-scanner.js";
 import { createDeviceUnlock, deviceUnlockSupported, getDeviceUnlock } from "./passkey.js";
-import { createVault, getVaultDevice, purgeVault, saveVault, unlockVault, unlockVaultWithDevice, updateVaultCredentials, vaultExists } from "./vault.js";
+import { createVault, getVaultDevice, getVaultRecord, purgeVault, replaceVaultRecord, saveVault, unlockVault, unlockVaultWithDevice, updateVaultCredentials, validateVaultBackupRecord, vaultExists, vaultPassphraseProblem } from "./vault.js";
+import { GOOGLE_DRIVE_CLIENT_ID } from "./google-drive-config.js";
+import { createVaultBackupEnvelope, GoogleDriveVaultBackup } from "./google-drive.js";
 import { loadBuildVersion } from "./build-version.js";
 import { initialsForName, photoDataUrl, readSimpleModePreference, writeSimpleModePreference } from "./simple-mode.js";
 
@@ -50,6 +52,11 @@ const el = {
   simpleVerifyInput: $("#simple-verify-code"), simpleVerifyButton: $("#simple-verify-button"), simpleVerifyResult: $("#simple-verify-result"), simpleVerifyRemaining: $("#simple-verify-remaining"),
   simplePhotoInput: $("#simple-photo-input"),
   vaultOptionsDialog: $("#vault-options-dialog"), vaultOptionsCopy: $("#vault-options-copy"), settingsChangePassword: $("#settings-change-password"),
+  localVaultSettings: $("#local-vault-settings"), localVaultDangerSettings: $("#local-vault-danger-settings"),
+  driveStatus: $("#drive-backup-status"), driveConnect: $("#drive-connect"), driveBackup: $("#drive-backup"),
+  driveRestoreOpen: $("#drive-restore-open"), driveDisconnect: $("#drive-disconnect"),
+  driveRestoreDialog: $("#drive-restore-dialog"), driveRestoreForm: $("#drive-restore-form"), driveRestoreCopy: $("#drive-restore-copy"),
+  driveRestoreConfirmation: $("#drive-restore-confirmation"), driveRestoreSubmit: $("#drive-restore-submit"), driveRestoreError: $("#drive-restore-error"),
   changePasswordDialog: $("#change-password-dialog"), changePasswordForm: $("#change-password-form"), currentVaultPassword: $("#current-vault-password"),
   newVaultPassword: $("#new-vault-password"), confirmNewVaultPassword: $("#confirm-new-vault-password"), changePasswordSubmit: $("#change-password-submit"), changePasswordError: $("#change-password-error"),
   changeDeviceOption: $("#change-device-option"), changeDeviceUnlock: $("#change-device-unlock"), changeDeviceCopy: $("#change-device-copy"),
@@ -75,6 +82,9 @@ let cameraScanner = null;
 let pendingCreateConfig = null;
 let simpleModeRequested = readSimpleModePreference();
 let simpleRenderedId = null;
+const googleDriveBackup = new GoogleDriveVaultBackup({ clientId: GOOGLE_DRIVE_CLIENT_ID });
+let driveStatusMessage = "";
+let pendingDriveRestore = null;
 
 function active() { return entries.find((entry) => entry.id === activeId) || entries[0] || null; }
 function selected(name) { return $(`input[name="${name}"]:checked`).value; }
@@ -140,12 +150,12 @@ function scannerInstance() {
     onDetected: async (value) => {
       const setupCode = normalizeScannedSetupCode(value);
       if (!setupCode) {
-        el.scannerStatus.textContent = "A QR code was found, but it is not a Trust Codes setup code.";
+        el.scannerStatus.textContent = "A QR code was found, but it is not a TrustCodes setup code.";
         return false;
       }
       try { decodeSetupCode(setupCode); }
       catch {
-        el.scannerStatus.textContent = "That Trust Codes QR code is damaged or unsupported.";
+        el.scannerStatus.textContent = "That TrustCodes QR code is damaged or unsupported.";
         return false;
       }
       el.importCode.value = setupCode;
@@ -273,7 +283,7 @@ function updateVaultUI() {
       ? '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>'
       : "Create vault";
   }
-  el.vaultSettings.hidden = !vaultAvailable || !vaultPresent;
+  el.vaultSettings.hidden = !vaultAvailable;
   el.vaultLock.hidden = !unlocked;
   el.saveChannel.disabled = !unlocked;
   el.saveImport.disabled = !unlocked;
@@ -503,12 +513,15 @@ function openVaultDialog() {
   el.vaultDialog.dataset.mode = creating ? "create" : "unlock";
   el.vaultDialogTitle.textContent = creating ? "Create encrypted vault" : "Unlock encrypted vault";
   el.vaultDialogCopy.textContent = creating
-    ? "Choose a recovery password. On compatible devices, you can also unlock with Face ID, fingerprint, or the device passcode."
+    ? "Choose a recovery passphrase. On compatible devices, you can also unlock with Face ID, fingerprint, or the device passcode."
     : vaultDevice
-      ? "Unlock with this device, or use the recovery password."
-      : "Your recovery password unlocks the encrypted entries saved in this browser context.";
+      ? "Unlock with this device, or use the recovery passphrase."
+      : "Your recovery passphrase unlocks the encrypted entries saved in this browser context.";
   el.vaultConfirmField.hidden = !creating;
   el.vaultConfirm.required = creating;
+  el.vaultPassphrase.minLength = creating ? 12 : 1;
+  el.vaultPassphrase.maxLength = creating ? 64 : 4096;
+  el.vaultPassphrase.autocomplete = creating ? "new-password" : "current-password";
   el.vaultDeviceOption.hidden = !creating || !deviceUnlockCapable;
   el.vaultDeviceUnlock.checked = false;
   el.vaultDeviceSubmit.hidden = creating || !vaultDevice || !deviceUnlockCapable;
@@ -521,12 +534,53 @@ function openVaultDialog() {
 }
 
 function openVaultOptionsDialog() {
-  if (!vaultPresent) return;
-  el.vaultOptionsCopy.textContent = vaultKey
-    ? "Change the recovery password or configure native device unlock."
-    : "Unlock the vault before changing its password or device-unlock method.";
-  el.settingsChangePassword.textContent = vaultKey ? "Change" : "Unlock and change";
+  el.localVaultSettings.hidden = !vaultPresent;
+  el.localVaultDangerSettings.hidden = !vaultPresent;
+  if (vaultPresent) {
+    el.vaultOptionsCopy.textContent = vaultKey
+      ? "Change the recovery passphrase or configure native device unlock."
+      : "Unlock the vault before changing its passphrase or device-unlock method.";
+    el.settingsChangePassword.textContent = vaultKey ? "Change" : "Unlock and change";
+  }
+  updateDriveBackupUI();
   el.vaultOptionsDialog.showModal();
+}
+
+function updateDriveBackupUI(message = driveStatusMessage) {
+  driveStatusMessage = message;
+  const configured = googleDriveBackup.configured;
+  const connected = googleDriveBackup.connected;
+  el.driveConnect.hidden = connected;
+  el.driveConnect.disabled = !configured;
+  el.driveBackup.hidden = !connected;
+  el.driveRestoreOpen.hidden = !connected;
+  el.driveDisconnect.hidden = !connected;
+  el.driveBackup.disabled = !vaultPresent;
+  el.driveStatus.textContent = message || (!configured
+    ? "Google Drive backup is not configured for this deployment."
+    : connected
+      ? "Connected. Backups are manual and contain only the encrypted vault record."
+      : "Connect Google Drive to back up or restore the encrypted vault.");
+}
+
+function driveFileStatus(file) {
+  if (!file?.modifiedTime) return "Connected to Google Drive.";
+  const timestamp = new Date(file.modifiedTime);
+  return Number.isNaN(timestamp.valueOf()) ? "Connected to Google Drive." : `Encrypted backup last updated ${timestamp.toLocaleString()}.`;
+}
+
+function setDriveBusy(button, busy, busyText, normalText) {
+  button.disabled = busy;
+  button.textContent = busy ? busyText : normalText;
+}
+
+function resetDriveRestoreDialog() {
+  pendingDriveRestore = null;
+  el.driveRestoreConfirmation.value = "";
+  el.driveRestoreSubmit.disabled = true;
+  el.driveRestoreSubmit.textContent = "Replace and restore";
+  el.driveRestoreError.hidden = true;
+  el.driveRestoreError.textContent = "";
 }
 
 function clearChangePasswordForm() {
@@ -539,8 +593,8 @@ function clearChangePasswordForm() {
   el.changeDeviceCopy.textContent = vaultDevice
     ? canOfferDevice
       ? "Keep device unlock enabled. You will confirm with the device while the vault keys are refreshed."
-      : "Device unlock is configured but unavailable in this browser. Turn it off to continue with password-only access."
-    : "Use a passkey with Face ID, fingerprint, or your device passcode. Your new password remains the recovery method.";
+      : "Device unlock is configured but unavailable in this browser. Turn it off to continue with passphrase-only access."
+    : "Use a passkey with Face ID, fingerprint, or your device passcode. Your new passphrase remains the recovery method.";
 }
 
 function openChangePasswordDialog() {
@@ -636,6 +690,99 @@ el.simplePhotoButton.addEventListener("click", () => {
 el.simplePhotoInput.addEventListener("change", () => applySelectedPhoto(el.simplePhotoInput));
 el.vaultSettings.addEventListener("click", openVaultOptionsDialog);
 $("#vault-options-close").addEventListener("click", () => el.vaultOptionsDialog.close());
+el.driveConnect.addEventListener("click", async () => {
+  setDriveBusy(el.driveConnect, true, "Connecting…", "Connect");
+  try {
+    await googleDriveBackup.connect();
+    const files = await googleDriveBackup.listBackups();
+    updateDriveBackupUI(files.length === 1
+      ? driveFileStatus(files[0])
+      : files.length > 1
+        ? "Connected, but multiple TrustCodes backups were found. Backup and restore are blocked until duplicates are removed."
+        : "Connected. No encrypted TrustCodes backup exists yet.");
+  } catch (error) {
+    updateDriveBackupUI(error.message);
+  } finally {
+    setDriveBusy(el.driveConnect, false, "Connecting…", "Connect");
+    updateDriveBackupUI();
+  }
+});
+el.driveDisconnect.addEventListener("click", () => {
+  googleDriveBackup.disconnect();
+  updateDriveBackupUI("Disconnected from Google Drive in this tab.");
+});
+el.driveBackup.addEventListener("click", async () => {
+  if (!vaultPresent) return updateDriveBackupUI("Create or restore an encrypted vault before backing up.");
+  setDriveBusy(el.driveBackup, true, "Backing up…", "Back up now");
+  try {
+    const record = validateVaultBackupRecord(await getVaultRecord());
+    const file = await googleDriveBackup.backup(createVaultBackupEnvelope(record));
+    updateDriveBackupUI(driveFileStatus(file));
+    showToast("Encrypted vault backed up to Google Drive");
+  } catch (error) {
+    updateDriveBackupUI(error.message);
+  } finally {
+    setDriveBusy(el.driveBackup, false, "Backing up…", "Back up now");
+    updateDriveBackupUI();
+  }
+});
+el.driveRestoreOpen.addEventListener("click", async () => {
+  setDriveBusy(el.driveRestoreOpen, true, "Checking…", "Restore…");
+  try {
+    pendingDriveRestore = await googleDriveBackup.restore(validateVaultBackupRecord);
+    const created = new Date(pendingDriveRestore.envelope.createdAt).toLocaleString();
+    el.driveRestoreCopy.textContent = vaultPresent
+      ? `This backup was created ${created}. It will replace the encrypted vault currently saved in this browser.`
+      : `This backup was created ${created}. It will become the encrypted vault in this browser.`;
+    el.vaultOptionsDialog.close();
+    el.driveRestoreDialog.showModal();
+    el.driveRestoreConfirmation.focus();
+  } catch (error) {
+    updateDriveBackupUI(error.message);
+  } finally {
+    setDriveBusy(el.driveRestoreOpen, false, "Checking…", "Restore…");
+    updateDriveBackupUI();
+  }
+});
+$("#drive-restore-cancel").addEventListener("click", () => {
+  resetDriveRestoreDialog();
+  el.driveRestoreDialog.close();
+});
+el.driveRestoreDialog.addEventListener("cancel", resetDriveRestoreDialog);
+el.driveRestoreConfirmation.addEventListener("input", () => {
+  el.driveRestoreSubmit.disabled = el.driveRestoreConfirmation.value.trim() !== "RESTORE";
+  el.driveRestoreError.hidden = true;
+});
+el.driveRestoreForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!pendingDriveRestore || el.driveRestoreConfirmation.value.trim() !== "RESTORE") {
+    el.driveRestoreError.textContent = "Type RESTORE exactly to confirm replacement of this browser’s encrypted vault.";
+    el.driveRestoreError.hidden = false;
+    return;
+  }
+  el.driveRestoreSubmit.disabled = true;
+  el.driveRestoreSubmit.textContent = "Restoring…";
+  try {
+    await replaceVaultRecord(pendingDriveRestore.envelope.vault);
+    clearActiveContext();
+    entries = entries.filter((entry) => !entry.persisted);
+    vaultKey = null;
+    vaultPresent = true;
+    vaultDevice = await getVaultDevice();
+    activeId = entries[0]?.id || null;
+    resetDriveRestoreDialog();
+    el.driveRestoreDialog.close();
+    renderWorkspace();
+    updateVaultUI();
+    showToast("Encrypted vault restored; unlock it with its recovery passphrase");
+    requestAnimationFrame(openVaultDialog);
+  } catch (error) {
+    el.driveRestoreError.textContent = error.message;
+    el.driveRestoreError.hidden = false;
+    el.driveRestoreSubmit.disabled = false;
+    el.driveRestoreSubmit.textContent = "Replace and restore";
+  }
+});
 el.settingsChangePassword.addEventListener("click", () => {
   el.vaultOptionsDialog.close();
   if (vaultKey) return openChangePasswordDialog();
@@ -650,25 +797,26 @@ $("#change-password-cancel").addEventListener("click", () => { clearChangePasswo
 el.changePasswordForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!vaultKey || !vaultPresent) {
-    el.changePasswordError.textContent = "Unlock the encrypted vault before changing its password.";
+    el.changePasswordError.textContent = "Unlock the encrypted vault before changing its passphrase.";
     el.changePasswordError.hidden = false;
     return;
   }
   const currentPassphrase = el.currentVaultPassword.value;
   const newPassphrase = el.newVaultPassword.value;
-  if (newPassphrase.length < 12) {
-    el.changePasswordError.textContent = "Use at least 12 characters for the new vault password.";
+  const passphraseProblem = vaultPassphraseProblem(newPassphrase);
+  if (passphraseProblem) {
+    el.changePasswordError.textContent = passphraseProblem;
     el.changePasswordError.hidden = false;
     return;
   }
   if (newPassphrase !== el.confirmNewVaultPassword.value) {
-    el.changePasswordError.textContent = "The new password confirmation does not match.";
+    el.changePasswordError.textContent = "The new passphrase confirmation does not match.";
     el.changePasswordError.hidden = false;
     el.confirmNewVaultPassword.select();
     return;
   }
   if (newPassphrase === currentPassphrase) {
-    el.changePasswordError.textContent = "Choose a different password.";
+    el.changePasswordError.textContent = "Choose a different passphrase.";
     el.changePasswordError.hidden = false;
     return;
   }
@@ -678,7 +826,7 @@ el.changePasswordForm.addEventListener("submit", async (event) => {
     const current = await unlockVault(currentPassphrase);
     let deviceAccess = null;
     if (el.changeDeviceUnlock.checked) {
-      if (!deviceUnlockCapable) throw new Error("Device unlock is not available in this browser. Turn it off to continue with password-only access.");
+      if (!deviceUnlockCapable) throw new Error("Device unlock is not available in this browser. Turn it off to continue with passphrase-only access.");
       el.changePasswordSubmit.textContent = vaultDevice ? "Confirm on device…" : "Creating device unlock…";
       deviceAccess = vaultDevice ? await getDeviceUnlock(vaultDevice) : await createDeviceUnlock();
     }
@@ -689,14 +837,14 @@ el.changePasswordForm.addEventListener("submit", async (event) => {
     clearChangePasswordForm();
     el.changePasswordDialog.close();
     updateVaultUI();
-    showToast(vaultDevice ? "Vault password and device unlock updated" : "Vault password changed");
+    showToast(vaultDevice ? "Vault passphrase and device unlock updated" : "Vault passphrase changed");
   } catch (error) {
     el.changePasswordError.textContent = error.message;
     el.changePasswordError.hidden = false;
     el.currentVaultPassword.select();
   } finally {
     el.changePasswordSubmit.disabled = false;
-    el.changePasswordSubmit.textContent = "Change password";
+    el.changePasswordSubmit.textContent = "Change passphrase";
   }
 });
 
@@ -955,7 +1103,10 @@ el.vaultForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const creating = el.vaultDialog.dataset.mode === "create";
   const passphrase = el.vaultPassphrase.value;
-  if (passphrase.length < 12) return showVaultError("Use at least 12 characters; a longer multi-word passphrase is strongly recommended.");
+  if (creating) {
+    const passphraseProblem = vaultPassphraseProblem(passphrase);
+    if (passphraseProblem) return showVaultError(passphraseProblem);
+  }
   if (creating && passphrase !== el.vaultConfirm.value) return showVaultError("The confirmation does not match.");
   el.vaultSubmit.disabled = true; el.vaultSubmit.textContent = creating ? "Creating…" : "Unlocking…";
   try {

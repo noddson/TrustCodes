@@ -1,6 +1,6 @@
-# Trust Codes
+# TrustCodes
 
-Trust Codes is a client-only HOTP/TOTP application. It has no backend, but it must be served over HTTP rather than opened through a `file://` URL.
+TrustCodes is a client-only HOTP/TOTP application. It has no backend, but it must be served over HTTP rather than opened through a `file://` URL.
 
 ## Run locally
 
@@ -22,7 +22,7 @@ Once a channel is available, **Simple mode** replaces the normal workspace with 
 
 ## Important security and liability limitations
 
-Trust Codes compares possession of configured cryptographic material. It does not establish a person's identity, authority, honesty, intent, or physical presence, and it cannot guarantee that a person, conversation, device, channel, or request is legitimate, private, uncompromised, or secure. Codes and proofs can be shared, relayed, coerced, stolen, guessed, or generated on a compromised device.
+TrustCodes compares possession of configured cryptographic material. It does not establish a person's identity, authority, honesty, intent, or physical presence, and it cannot guarantee that a person, conversation, device, channel, or request is legitimate, private, uncompromised, or secure. Codes and proofs can be shared, relayed, coerced, stolen, guessed, or generated on a compromised device.
 
 To the fullest extent permitted by law, this app is provided “as is” and “as available,” without warranties or guarantees, and the developer is not liable for loss or harm arising from its use, misuse or reliance on its results. It is important to independently confirm the person and every sensitive, unusual, urgent, or high-value request using a previously trusted contact method before sharing information, sending money, granting access, or acting. You assume all risk of use.
 
@@ -30,7 +30,7 @@ This notice describes intended product limitations; it is not legal advice and d
 
 ## Pay what you want
 
-Trust Codes is available without payment. Anyone who wants to support continued development can make an optional [pay-what-you-want contribution](https://paypal.me/noddson).
+TrustCodes is available without payment. Anyone who wants to support continued development can make an optional [pay-what-you-want contribution](https://paypal.me/noddson).
 
 ## QR setup exchange
 
@@ -44,13 +44,13 @@ The QR encoder and fallback decoder are vendored for offline use. See [THIRD_PAR
 
 ## Encrypted local vault
 
-Saved channels are stored in IndexedDB as an AES-256-GCM ciphertext. New vaults use a random 256-bit data-encryption key. The recovery password is processed locally with PBKDF2-HMAC-SHA256, a random 128-bit salt, and 600,000 iterations; that derived key wraps the random vault key. Neither the password nor any unwrapped key is persisted. A saved channel's locally resized contact photo is part of the encrypted ciphertext.
+Saved channels are stored in IndexedDB as an AES-256-GCM ciphertext. New vaults use a random 256-bit data-encryption key. New and changed recovery passphrases must contain 12–64 characters, including uppercase and lowercase letters, a number, and a symbol. Existing vaults created under the earlier policy remain unlockable. The recovery passphrase is processed locally with PBKDF2-HMAC-SHA256, a random 128-bit salt, and 600,000 iterations; that derived key wraps the random vault key. Neither the passphrase nor any unwrapped key is persisted. A saved channel's locally resized contact photo is part of the encrypted ciphertext.
 
-On compatible secure browsers, vault creation can also register a local passkey and use the WebAuthn PRF extension after system user verification. The 32-byte PRF result is passed through HKDF and wraps the same random vault key, allowing Face ID, fingerprint, or device-passcode unlock while the recovery password remains available. Trust Codes stores only the credential ID, random PRF input, KDF salt, and wrapped vault key—not biometric data, a device passcode, or the PRF secret. Actual PRF support is established only when the browser and passkey provider successfully create the device-unlock credential.
+On compatible secure browsers, vault creation can also register a local passkey and use the WebAuthn PRF extension after system user verification. The 32-byte PRF result is passed through HKDF and wraps the same random vault key, allowing Face ID, fingerprint, or device-passcode unlock while the recovery passphrase remains available. TrustCodes stores only the credential ID, random PRF input, KDF salt, and wrapped vault key—not biometric data, a device passcode, or the PRF secret. Actual PRF support is established only when the browser and passkey provider successfully create the device-unlock credential.
 
-The gear beside the vault control opens vault options. An unlocked vault password can be changed there, and device unlock can be enabled or removed. The current password is verified before saved entries are re-encrypted with a fresh vault key and salt. Keeping device unlock enabled also requires system user verification so the new vault key can be wrapped again. A failed verification, passkey operation, or encryption attempt leaves the previous vault record intact.
+The gear beside the vault control opens vault options. An unlocked vault passphrase can be changed there, and device unlock can be enabled or removed. The current passphrase is verified before saved entries are re-encrypted with a fresh vault key and salt. Keeping device unlock enabled also requires system user verification so the new vault key can be wrapped again. A failed verification, passkey operation, or encryption attempt leaves the previous vault record intact.
 
-The same gear offers **Purge vault**, protected by two warning and confirmation stages. Purging permanently deletes the encrypted vault record in the current browser context, including all saved channels, photos, counters, and proof state. Unsaved in-memory channels are not deleted. A Trust Codes passkey may remain listed in the operating system's credential manager because websites cannot delete it directly, but it is useless after its corresponding encrypted vault record is purged.
+The same gear offers **Purge vault**, protected by two warning and confirmation stages. Purging permanently deletes the encrypted vault record in the current browser context, including all saved channels, photos, counters, and proof state. Unsaved in-memory channels are not deleted. A TrustCodes passkey may remain listed in the operating system's credential manager because websites cannot delete it directly, but it is useless after its corresponding encrypted vault record is purged.
 
 Without an unlocked vault and an explicitly selected save option, channels, cryptographic material, counters, proof state, and contact photos remain only in the current page's memory and disappear on reload or close. They are not written to plaintext browser storage. The only simple-mode value stored outside the vault is the non-sensitive on/off preference in LocalStorage.
 
@@ -58,7 +58,20 @@ This protects secrets **at rest** while the vault is locked or the browser is cl
 
 WebAuthn PRF binds the device-unlock wrapping secret to a passkey and requires the browser's system user-verification ceremony. It does not turn the static site into a native keychain: after a successful unlock, the page's JavaScript runtime still receives a usable in-memory vault key.
 
-Keep the one-time setup code somewhere safe. Browser data can be cleared, and there is no recovery service for the vault password.
+Keep the one-time setup code somewhere safe. Browser data can be cleared, and there is no recovery service for the vault passphrase.
+
+## Google Drive encrypted backup
+
+The vault gear contains manual **Back up now** and **Restore** controls using Google Drive's hidden `appDataFolder`. TrustCodes requests only the `https://www.googleapis.com/auth/drive.appdata` scope. The uploaded JSON envelope contains the already-encrypted vault record and cryptographic metadata; it does not contain the recovery passphrase, an unwrapped vault key, plaintext channel contents, context values, or plaintext contact photos.
+
+To enable the controls for a deployment:
+
+1. In Google Cloud, enable the Google Drive API and configure the OAuth consent screen.
+2. Create an OAuth 2.0 **Web application** client.
+3. Add `https://noddson.github.io` as an authorized JavaScript origin for GitHub Pages. Add `http://localhost:4173` for local development.
+4. Put the public client ID in `google-drive-config.js`. Do not add a client secret; browser applications cannot keep one confidential.
+
+Access tokens are held only in page memory and are revoked when **Disconnect** is pressed. Backups are never automatic. A backup updates the one known TrustCodes app-data file; duplicates stop the operation rather than allowing an ambiguous overwrite. Restore downloads and strictly validates the encrypted record before showing a destructive confirmation, then replaces—never merges—the local browser vault and requires the restored vault's recovery passphrase or compatible device credential to unlock it.
 
 ## Trust models
 
