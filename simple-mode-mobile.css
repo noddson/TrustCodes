@@ -28,7 +28,7 @@
   }
 
   .simple-people-list {
-    justify-content: flex-start;
+    justify-content: safe center;
     flex-wrap: nowrap;
     overflow-x: auto;
     overscroll-behavior-x: contain;
