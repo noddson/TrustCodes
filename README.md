@@ -114,7 +114,7 @@ Mutual and one-way options use the same raw displayed-entropy classifications:
 
 For entropy values between listed anchors, the classification uses the greatest threshold the option meets. These labels do not measure the entropy of the underlying shared secret or determine whether a request is safe.
 
-The green details card beneath each strength selector gives the qualitative rating, exact number of possible values, and an illustrative average and exhaustive search time at 20 billion trials per second. This is a fixed high-end-GPU-class scenario, not a prediction. For one-way proofs, offline search is relevant if the verifier anchor is exposed. For mutual codes, enumerating the displayed code space does not recover the shared secret because an observed code does not provide an offline correctness test.
+For mutual codes, the format selector sits beside a contextual 4–16 strength slider labelled in characters or words. A fixed public example beneath the format shows only how the selected code will look; it is never derived from channel cryptographic material. The color-coded entropy card progresses through every named classification from red for Very Weak, through softer red, yellow, and light green, to deep green for Legendary. It gives the qualitative rating, exact number of possible values, and an illustrative average and exhaustive search time at 20 billion trials per second. This is a fixed high-end-GPU-class scenario, not a prediction. For one-way proofs, offline search is relevant if the verifier anchor is exposed. For mutual codes, enumerating the displayed code space does not recover the shared secret because an observed code does not provide an offline correctness test.
 
 ## Browser security policy
 

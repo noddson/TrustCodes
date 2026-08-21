@@ -25,6 +25,11 @@ export function entropyClassification(bits) {
   return ENTROPY_LEVELS.find(([minimum]) => bits >= minimum)?.[1] || "Very Weak";
 }
 
+export function entropyTone(bits) {
+  if (!Number.isSafeInteger(bits) || bits < 0) throw new Error("Unsupported entropy strength.");
+  return entropyClassification(bits).toLowerCase().replace(" ", "-");
+}
+
 export function strengthOptionLabel(format, length) {
   const unit = format === "words" ? "words" : "characters";
   return `${length} ${unit} · ${entropyBits(format, length)} bits`;

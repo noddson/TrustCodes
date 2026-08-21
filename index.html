@@ -124,13 +124,17 @@
               <label><input type="radio" name="scheme" value="proof"><span><strong>One-way proof</strong><small>Only the prover can make the next phrase</small></span></label>
             </div></fieldset>
 
-            <div id="mutual-settings" class="settings-grid wide-field">
-              <fieldset><legend>Code type</legend><div class="segmented">
+            <div id="mutual-settings" class="mutual-settings wide-field">
+              <fieldset class="mutual-method"><legend>Code type</legend><div class="segmented">
                 <label><input type="radio" name="method" value="totp" checked><span><strong>Time-based</strong><small>Refreshes every 30 seconds</small></span></label>
                 <label><input type="radio" name="method" value="hotp"><span><strong>Counter-based</strong><small>Advance together after a conversation</small></span></label>
               </div></fieldset>
-              <label class="field"><span>Code format</span><select id="code-format"><option value="numeric">Numbers</option><option value="base32">Letters + numbers · Crockford</option><option value="words">Memorable words</option></select><small id="format-help">Familiar and easy to read aloud.</small></label>
-              <div class="field"><span><label for="code-length">Code strength</label></span><select id="code-length"></select><div id="strength-rating" class="strength-rating"></div></div>
+              <div class="mutual-code-grid">
+                <label class="field mutual-format-field"><span>Code format</span><select id="code-format"><option value="numeric">Numbers</option><option value="base32">Letters + numbers</option><option value="words">Memorable words</option></select><small id="format-help">Familiar and easy to read aloud.</small></label>
+                <div class="field mutual-strength-field"><span class="range-heading"><label for="code-length">Code strength</label><output id="code-length-label" for="code-length">6 characters</output></span><input id="code-length" type="range" min="4" max="16" step="1" value="6"><div class="range-scale" aria-hidden="true"><span>4</span><span>16</span></div></div>
+                <div class="code-example-panel"><span>Example code</span><code id="format-example">482 917</code><small>Example appearance only—not a generated TrustCode.</small></div>
+                <div id="strength-rating" class="strength-rating mutual-strength-rating"></div>
+              </div>
             </div>
 
             <div id="proof-settings" class="settings-grid wide-field" hidden>
@@ -260,7 +264,7 @@
       </div>
       <div class="settings-row">
         <div><strong>Automatic secure lock</strong><small id="lock-timeout-copy">Lock and clear decrypted data after 10 minutes without activity. Time in the background counts toward the same interval.</small></div>
-        <label class="settings-select"><span class="sr-only">Inactivity timeout</span><select id="lock-timeout"><option value="3">3 minutes</option><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="15">15 minutes</option><option value="20">20 minutes</option><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">60 minutes</option><option value="0">Never</option></select></label>
+        <label class="settings-select"><span class="sr-only">Inactivity timeout</span><select id="lock-timeout"><option value="3">3 min</option><option value="5">5 min</option><option value="10">10 min</option><option value="15">15 min</option><option value="20">20 min</option><option value="30">30 min</option><option value="45">45 min</option><option value="60">60 min</option><option value="0">Never</option></select></label>
       </div>
       <div class="settings-row drive-settings-row">
         <div>

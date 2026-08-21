@@ -6,6 +6,8 @@ const BASE32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 const CROCKFORD_BASE32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 const DEFAULT_PROOF_WORDS = 6;
 const PROOF_WORD_LENGTHS = [5, 6, 7, 8, 9, 10];
+export const MUTUAL_LENGTH_MIN = 4;
+export const MUTUAL_LENGTH_MAX = 16;
 const CONTEXT_ITERATIONS = 600_000;
 const encoder = new TextEncoder();
 const SETUP_AAD = encoder.encode("TrustCodes/AuthenticatedSetup/v1");
@@ -145,6 +147,13 @@ export async function hmacForCounter(secret, counter, context = "", method = "ho
   return new Uint8Array(await crypto.subtle.sign("HMAC", key, movingFactorMessage(counter, context, method)));
 }
 
+async function extendedWordDigest(secret, counter, context, method, digest) {
+  const key = await crypto.subtle.importKey("raw", decodeBase32(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const message = concatBytes(encoder.encode("TrustCodes/MutualWordsExtension/v1\0"), movingFactorMessage(counter, context, method));
+  const extension = new Uint8Array(await crypto.subtle.sign("HMAC", key, message));
+  return concatBytes(digest, extension);
+}
+
 function bytesToBigInt(bytes) {
   let value = 0n;
   for (const byte of bytes) value = (value << 8n) | BigInt(byte);
@@ -229,7 +238,10 @@ async function mutualSecretForContext(entry, context) {
 export async function generateMutualCode(entry, time = Date.now(), counterOverride, context = entry.context || "") {
   const counter = counterOverride ?? (entry.method === "totp" ? timeCounter(time, entry.period || 30) : entry.counter);
   const secret = await mutualSecretForContext(entry, context);
-  const digest = await hmacForCounter(secret, counter, context, entry.method);
+  let digest = await hmacForCounter(secret, counter, context, entry.method);
+  if (entry.format === "words" && entry.length * 11 > digest.byteLength * 8) {
+    digest = await extendedWordDigest(secret, counter, context, entry.method, digest);
+  }
   return formatDigest(digest, entry.format, entry.length);
 }
 
@@ -364,7 +376,11 @@ export async function createChannelPair(config) {
   };
   const protection = () => ({ contextProtection: "pbkdf2-wrap", contextSalt: encodeBase64Url(crypto.getRandomValues(new Uint8Array(16))) });
   if (config.scheme === "mutual") {
-    const rawSecret = crypto.getRandomValues(new Uint8Array(20));
+    if (!["totp", "hotp"].includes(config.method) || !["numeric", "base32", "words"].includes(config.format)
+      || !Number.isSafeInteger(config.length) || config.length < MUTUAL_LENGTH_MIN || config.length > MUTUAL_LENGTH_MAX) {
+      throw new Error("Mutual codes must use a supported format with a strength from 4 to 16.");
+    }
+    const rawSecret = crypto.getRandomValues(new Uint8Array(32));
     const local = { ...common, ...protection(), id: createId(), scheme: "mutual", method: config.method, period: 30, counter: 0, format: config.format, length: config.length };
     const peer = { ...common, ...protection(), id: createId(), scheme: "mutual", method: config.method, period: 30, counter: 0, format: config.format, length: config.length };
     local.secret = encodeBase32(await transformContextMaterial(local, rawSecret, context, "mutual-secret"));
@@ -406,8 +422,7 @@ function entryFromSetupData(data) {
     if (!["totp", "hotp"].includes(data.m) || !["numeric", "base32", "words"].includes(data.f)) throw new Error();
     const secret = decodeBase32(data.k);
     if (secret.length < 16 || secret.length > 64) throw new Error();
-    const allowed = data.f === "words" ? PROOF_WORD_LENGTHS : [4, 6, 8, 10, 12, 16];
-    if (!allowed.includes(data.l)) throw new Error();
+    if (!Number.isSafeInteger(data.l) || data.l < MUTUAL_LENGTH_MIN || data.l > MUTUAL_LENGTH_MAX) throw new Error();
     return { ...common, method: data.m, secret: data.k, period: 30, counter: Number.isSafeInteger(data.c) && data.c >= 0 ? data.c : 0, format: data.f, length: data.l };
   }
   if (!["prove", "verify"].includes(data.r) || !PROOF_WORD_LENGTHS.includes(data.l) || !Number.isSafeInteger(data.e) || data.e < 0 || !Number.isSafeInteger(data.t) || data.t < data.e || data.t < 1 || data.t > 5000) throw new Error();
