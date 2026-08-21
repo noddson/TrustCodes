@@ -1,9 +1,9 @@
 import {
   clearProofCache,
+  clearSensitiveCaches,
   consumeProof,
   createChannelPair,
   decodeProtectedSetupCode,
-  decodeSetupCode,
   encodeProtectedSetupCode,
   generateSetupPassphrase,
   generateMutualCode,
@@ -19,11 +19,14 @@ import { drawQrCode } from "./qr.js";
 import { cameraErrorMessage, normalizeScannedSetupCode, QrCameraScanner } from "./qr-scanner.js";
 import { createDeviceUnlock, deviceUnlockSupported, getDeviceUnlock } from "./passkey.js";
 import { createVault, getVaultDevice, getVaultRecord, purgeVault, replaceVaultRecord, saveVault, unlockVault, unlockVaultWithDevice, updateVaultCredentials, validateVaultBackupRecord, vaultExists, vaultPassphraseProblem } from "./vault.js";
+import { assessVaultPassword, generateVaultRecoveryCode } from "./vault-password.js";
+import { readLockTimeout, writeLockTimeout } from "./lock-settings.js";
 import { GOOGLE_DRIVE_CLIENT_ID } from "./google-drive-config.js";
 import { createVaultBackupEnvelope, GoogleDriveVaultBackup } from "./google-drive.js";
 import { loadBuildVersion } from "./build-version.js";
 import { initialsForName, photoDataUrl, readSimpleModePreference, writeSimpleModePreference } from "./simple-mode.js";
 import { entropyBits, entropyClassification, strengthOptionLabel } from "./strength.js";
+import { appendAuditLog, AUDIT_ACTION_LABELS, AUDIT_ACTIONS, auditLogViewingEnabled, clearPendingAuditLog, clearVaultUnlockFailures, mergeAuditLogs, noteVaultUnlockFailure, readPendingAuditLog, writePendingAuditLog } from "./audit-log.js";
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -46,7 +49,7 @@ const el = {
   verifyCard: $("#verify-card"), verifyInput: $("#verify-code"), verifyButton: $("#verify-button"), verifyPrompt: $("#verify-prompt"), verifyRemaining: $("#verify-remaining"), result: $("#verify-result"), toast: $("#toast"),
   vaultDot: $("#vault-dot"), vaultStatus: $("#vault-status"), vaultDetail: $("#vault-detail"), vaultAction: $("#vault-action"), vaultSettings: $("#vault-settings"), vaultLock: $("#vault-lock"),
   vaultDialog: $("#vault-dialog"), vaultForm: $("#vault-form"), vaultDialogTitle: $("#vault-dialog-title"), vaultDialogCopy: $("#vault-dialog-copy"),
-  vaultPassphrase: $("#vault-passphrase"), vaultConfirmField: $("#vault-confirm-field"), vaultConfirm: $("#vault-confirm"), vaultSubmit: $("#vault-submit"), vaultError: $("#vault-error"),
+  vaultPasswordField: $("#vault-password-field"), vaultPassphrase: $("#vault-passphrase"), vaultPasswordHelp: $("#vault-password-help"), vaultPasswordStrength: $("#vault-password-strength"), vaultConfirmField: $("#vault-confirm-field"), vaultConfirm: $("#vault-confirm"), vaultGeneratedRecoveryNote: $("#vault-generated-recovery-note"), vaultSubmit: $("#vault-submit"), vaultError: $("#vault-error"),
   vaultDeviceOption: $("#vault-device-option"), vaultDeviceUnlock: $("#vault-device-unlock"), vaultDeviceSubmit: $("#vault-device-submit"), vaultUnlockDivider: $("#vault-unlock-divider"),
   contextConfirmDialog: $("#context-confirm-dialog"), contextConfirmForm: $("#context-confirm-form"), contextConfirm: $("#context-confirm"),
   contextConfirmSubmit: $("#context-confirm-submit"), contextConfirmError: $("#context-confirm-error"),
@@ -61,14 +64,17 @@ const el = {
   simpleVerifyInput: $("#simple-verify-code"), simpleVerifyButton: $("#simple-verify-button"), simpleVerifyResult: $("#simple-verify-result"), simpleVerifyRemaining: $("#simple-verify-remaining"),
   simplePhotoInput: $("#simple-photo-input"),
   vaultOptionsDialog: $("#vault-options-dialog"), vaultOptionsCopy: $("#vault-options-copy"), settingsChangePassword: $("#settings-change-password"),
+  auditLogSettings: $("#audit-log-settings"), auditLogSettingsCopy: $("#audit-log-settings-copy"), viewAuditLog: $("#view-audit-log"), auditLogDialog: $("#audit-log-dialog"), auditLogList: $("#audit-log-list"), auditLogEmpty: $("#audit-log-empty"),
+  lockTimeout: $("#lock-timeout"), lockTimeoutCopy: $("#lock-timeout-copy"), disableAutoLockDialog: $("#disable-auto-lock-dialog"), disableAutoLockForm: $("#disable-auto-lock-form"), disableAutoLockConfirm: $("#disable-auto-lock-confirm"), disableAutoLockSubmit: $("#disable-auto-lock-submit"),
   localVaultSettings: $("#local-vault-settings"), localVaultDangerSettings: $("#local-vault-danger-settings"),
   driveStatus: $("#drive-backup-status"), driveConnect: $("#drive-connect"), driveBackup: $("#drive-backup"),
   driveRestoreOpen: $("#drive-restore-open"), driveDisconnect: $("#drive-disconnect"),
   driveRestoreDialog: $("#drive-restore-dialog"), driveRestoreForm: $("#drive-restore-form"), driveRestoreCopy: $("#drive-restore-copy"),
   driveRestoreConfirmation: $("#drive-restore-confirmation"), driveRestoreSubmit: $("#drive-restore-submit"), driveRestoreError: $("#drive-restore-error"),
   changePasswordDialog: $("#change-password-dialog"), changePasswordForm: $("#change-password-form"), currentVaultPassword: $("#current-vault-password"),
-  newVaultPassword: $("#new-vault-password"), confirmNewVaultPassword: $("#confirm-new-vault-password"), changePasswordSubmit: $("#change-password-submit"), changePasswordError: $("#change-password-error"),
+  newVaultPasswordField: $("#new-vault-password-field"), newVaultPassword: $("#new-vault-password"), changePasswordStrength: $("#change-password-strength"), confirmNewVaultPasswordField: $("#confirm-new-vault-password-field"), confirmNewVaultPassword: $("#confirm-new-vault-password"), changeGeneratedRecoveryNote: $("#change-generated-recovery-note"), changePasswordSubmit: $("#change-password-submit"), changePasswordError: $("#change-password-error"),
   changeDeviceOption: $("#change-device-option"), changeDeviceUnlock: $("#change-device-unlock"), changeDeviceCopy: $("#change-device-copy"),
+  recoveryCodeDialog: $("#recovery-code-dialog"), recoveryCodeForm: $("#recovery-code-form"), recoveryCodeValue: $("#recovery-code-value"), downloadRecoveryCode: $("#download-recovery-code"), recoveryCodeSaved: $("#recovery-code-saved"), recoveryCodeClose: $("#recovery-code-close"),
   purgeVaultDialog: $("#purge-vault-dialog"), purgeVaultForm: $("#purge-vault-form"), purgeVaultFirst: $("#purge-vault-first"), purgeVaultFinal: $("#purge-vault-final"),
   purgeVaultConfirmation: $("#purge-vault-confirmation"), purgeVaultSubmit: $("#purge-vault-submit"), purgeVaultError: $("#purge-vault-error"),
 };
@@ -95,6 +101,14 @@ let simpleRenderedId = null;
 const googleDriveBackup = new GoogleDriveVaultBackup({ clientId: GOOGLE_DRIVE_CLIENT_ID });
 let driveStatusMessage = "";
 let pendingDriveRestore = null;
+let recoveryCode = null;
+let lockTimeoutMinutes = readLockTimeout();
+let inactivityTimer = null;
+let lastActivityAt = 0;
+let securityEpoch = 0;
+let auditLog = [];
+let pendingAuditNeedsClear = false;
+const auditLogViewEnabled = auditLogViewingEnabled();
 
 function active() { return entries.find((entry) => entry.id === activeId) || entries[0] || null; }
 function selected(name) { return $(`input[name="${name}"]:checked`).value; }
@@ -164,9 +178,7 @@ function scannerInstance() {
         return false;
       }
       try {
-        if (isProtectedSetupCode(setupCode)) {
-          if (!validateProtectedSetupCode(setupCode)) throw new Error();
-        } else decodeSetupCode(setupCode);
+        if (!validateProtectedSetupCode(setupCode)) throw new Error();
       }
       catch {
         el.scannerStatus.textContent = "That TrustCodes QR code is damaged or unsupported.";
@@ -311,9 +323,29 @@ function updateVaultUI() {
 async function savePersisted() {
   if (!vaultKey) return;
   try {
-    await saveVault(vaultKey, entries.filter((entry) => entry.persisted).map(withoutContext));
+    await saveVault(vaultKey, entries.filter((entry) => entry.persisted).map(withoutContext), auditLog);
+    if (pendingAuditNeedsClear) {
+      clearPendingAuditLog();
+      pendingAuditNeedsClear = false;
+    }
     updateVaultUI();
   } catch (error) { showToast(error.message); }
+}
+
+async function recordAuditAction(action, date = new Date()) {
+  if (!vaultKey) {
+    writePendingAuditLog(appendAuditLog(readPendingAuditLog(), action, date));
+    return;
+  }
+  auditLog = appendAuditLog(auditLog, action, date);
+  await savePersisted();
+}
+
+function warnedRecoveryAuditAction(value) {
+  const label = assessVaultPassword(value).label;
+  if (label === "Weak") return AUDIT_ACTIONS.WEAK_RECOVERY_PASSWORD_ACCEPTED;
+  if (label === "Good") return AUDIT_ACTIONS.GOOD_RECOVERY_PASSWORD_ACCEPTED;
+  return null;
 }
 
 function addEntry(entry) {
@@ -324,9 +356,11 @@ function addEntry(entry) {
 }
 
 async function presentForSharing(local, peer) {
+  const operationEpoch = securityEpoch;
   const passphrase = generateSetupPassphrase();
   const setupCode = await encodeProtectedSetupCode(peer, passphrase);
   const fingerprint = await setupFingerprint(setupCode);
+  if (operationEpoch !== securityEpoch) return;
   stopCameraScanner();
   hideSetupQr();
   pendingLocal = local; pendingPeer = peer;
@@ -531,19 +565,159 @@ function clearVaultCredentialInputs() {
   el.confirmNewVaultPassword.value = "";
 }
 
+function renderPasswordStrength(input, output) {
+  if (!input.value) {
+    output.hidden = true;
+    output.textContent = "";
+    output.className = "password-strength";
+    return;
+  }
+  const assessment = assessVaultPassword(input.value);
+  output.hidden = false;
+  output.textContent = assessment.message;
+  output.className = `password-strength level-${assessment.level}`;
+}
+
+function setVaultRecoveryInputMode() {
+  const generated = el.vaultDialog.dataset.mode === "create" && el.vaultDeviceUnlock.checked;
+  el.vaultPasswordField.hidden = generated;
+  el.vaultConfirmField.hidden = generated || el.vaultDialog.dataset.mode !== "create";
+  el.vaultPasswordStrength.hidden = generated || !el.vaultPassphrase.value;
+  el.vaultGeneratedRecoveryNote.hidden = !generated;
+  el.vaultPassphrase.required = !generated;
+  el.vaultConfirm.required = !generated && el.vaultDialog.dataset.mode === "create";
+  if (generated) {
+    el.vaultPassphrase.value = "";
+    el.vaultConfirm.value = "";
+    renderPasswordStrength(el.vaultPassphrase, el.vaultPasswordStrength);
+  }
+}
+
+function setChangeRecoveryInputMode() {
+  const generated = el.changeDeviceUnlock.checked;
+  el.newVaultPasswordField.hidden = generated;
+  el.confirmNewVaultPasswordField.hidden = generated;
+  el.changePasswordStrength.hidden = generated || !el.newVaultPassword.value;
+  el.changeGeneratedRecoveryNote.hidden = !generated;
+  el.newVaultPassword.required = !generated;
+  el.confirmNewVaultPassword.required = !generated;
+  if (generated) {
+    el.newVaultPassword.value = "";
+    el.confirmNewVaultPassword.value = "";
+    renderPasswordStrength(el.newVaultPassword, el.changePasswordStrength);
+  }
+}
+
+function clearRecoveryCode() {
+  recoveryCode = null;
+  el.recoveryCodeValue.textContent = "";
+  el.recoveryCodeSaved.checked = false;
+  el.recoveryCodeClose.disabled = true;
+}
+
+function showRecoveryCode(value) {
+  recoveryCode = value;
+  el.recoveryCodeValue.textContent = value;
+  el.recoveryCodeSaved.checked = false;
+  el.recoveryCodeClose.disabled = true;
+  el.recoveryCodeDialog.showModal();
+  el.downloadRecoveryCode.focus();
+}
+
+function updateLockTimeoutCopy() {
+  el.lockTimeout.value = String(lockTimeoutMinutes);
+  el.lockTimeoutCopy.textContent = lockTimeoutMinutes
+    ? `Lock and clear decrypted data after ${lockTimeoutMinutes === 60 ? "1 hour" : `${lockTimeoutMinutes} minutes`} without activity. Time spent in the background counts toward this interval.`
+    : "Automatic locking is set to Never. The vault remains unlocked in the foreground and background until you lock, close, or reload it.";
+}
+
+function scheduleInactivityLock() {
+  clearTimeout(inactivityTimer);
+  inactivityTimer = null;
+  if (!vaultKey || !lockTimeoutMinutes) return;
+  const remaining = lockTimeoutMinutes * 60_000 - (Date.now() - lastActivityAt);
+  if (remaining <= 0) return secureLock("Vault locked after inactivity");
+  inactivityTimer = setTimeout(() => secureLock("Vault locked after inactivity"), remaining);
+}
+
+function beginUnlockedSession() {
+  lastActivityAt = Date.now();
+  scheduleInactivityLock();
+}
+
+function noteActivity(event) {
+  if (!event.isTrusted || !vaultKey || document.hidden) return;
+  lastActivityAt = Date.now();
+  scheduleInactivityLock();
+}
+
+function operationWasLocked(operationEpoch) {
+  return operationEpoch !== securityEpoch;
+}
+
+function secureLock(message = "Encrypted vault securely locked") {
+  securityEpoch += 1;
+  clearTimeout(inactivityTimer);
+  clearTimeout(contextTimer);
+  inactivityTimer = null;
+  lastActivityAt = 0;
+  stopCameraScanner();
+  cameraScanner = null;
+  hideSetupQr();
+  clearSensitiveCaches();
+  resetSetupViews();
+  resetFingerprintConfirmation();
+  clearContextConfirm();
+  clearVaultCredentialInputs();
+  clearRecoveryCode();
+  resetDriveRestoreDialog();
+  [el.name, el.context, el.importCode, el.importSetupPassphrase, el.useContext, el.verifyInput, el.simpleVerifyInput, el.simplePhotoInput, el.purgeVaultConfirmation].forEach((input) => {
+    if (input) input.value = "";
+  });
+  [el.setupCode, el.setupPassphrase, el.setupFingerprint, el.importSetupFingerprint, el.generated, el.simpleGenerated, el.simpleName, el.simplePhotoInitials, el.simplePrompt, el.result, el.simpleVerifyResult].forEach((node) => {
+    if (node) node.textContent = "";
+  });
+  [el.simplePhoto].forEach((image) => { image?.removeAttribute("src"); });
+  el.simplePeopleList.replaceChildren();
+  el.select.replaceChildren();
+  el.auditLogList.replaceChildren();
+  el.scannerCanvas.width = 0;
+  el.scannerCanvas.height = 0;
+  googleDriveBackup.disconnect();
+  driveStatusMessage = "";
+  document.querySelectorAll("dialog[open]").forEach((dialog) => dialog.close());
+  pendingLocal = null;
+  pendingPeer = null;
+  pendingCreateConfig = null;
+  pendingImportEntry = null;
+  pendingDriveRestore = null;
+  entries = [];
+  auditLog = [];
+  pendingAuditNeedsClear = false;
+  activeId = null;
+  activeContext = "";
+  vaultKey = null;
+  lastCounter = -1;
+  simpleRenderedId = null;
+  openVaultOptionsAfterUnlock = false;
+  renderWorkspace();
+  updateVaultUI();
+  showToast(message);
+}
+
 function openVaultDialog() {
   const creating = !vaultPresent;
   el.vaultDialog.dataset.mode = creating ? "create" : "unlock";
   el.vaultDialogTitle.textContent = creating ? "Create encrypted vault" : "Unlock encrypted vault";
   el.vaultDialogCopy.textContent = creating
-    ? "Choose a recovery passphrase. On compatible devices, you can also unlock with Face ID, fingerprint, or the device passcode."
+    ? "Use a passkey with a device-generated recovery code, or choose your own long recovery password."
     : vaultDevice
-      ? "Unlock with this device, or use the recovery passphrase."
-      : "Your recovery passphrase unlocks the encrypted entries saved in this browser context.";
+      ? "Unlock with this device, or use the recovery password or code."
+      : "Your recovery password unlocks the encrypted entries saved in this browser context.";
   el.vaultConfirmField.hidden = !creating;
   el.vaultConfirm.required = creating;
-  el.vaultPassphrase.minLength = creating ? 12 : 1;
-  el.vaultPassphrase.maxLength = creating ? 64 : 4096;
+  el.vaultPassphrase.minLength = creating ? 8 : 1;
+  el.vaultPassphrase.maxLength = creating ? 128 : 4096;
   el.vaultPassphrase.autocomplete = creating ? "new-password" : "current-password";
   el.vaultDeviceOption.hidden = !creating || !deviceUnlockCapable;
   el.vaultDeviceUnlock.checked = false;
@@ -551,6 +725,8 @@ function openVaultDialog() {
   el.vaultUnlockDivider.hidden = el.vaultDeviceSubmit.hidden;
   el.vaultSubmit.textContent = creating ? "Create encrypted vault" : "Unlock vault";
   clearVaultCredentialInputs();
+  renderPasswordStrength(el.vaultPassphrase, el.vaultPasswordStrength);
+  setVaultRecoveryInputMode();
   el.vaultError.hidden = true;
   el.vaultDialog.showModal();
   (el.vaultDeviceSubmit.hidden ? el.vaultPassphrase : el.vaultDeviceSubmit).focus();
@@ -561,12 +737,33 @@ function openVaultOptionsDialog() {
   el.localVaultDangerSettings.hidden = !vaultPresent;
   if (vaultPresent) {
     el.vaultOptionsCopy.textContent = vaultKey
-      ? "Change the recovery passphrase or configure native device unlock."
-      : "Unlock the vault before changing its passphrase or device-unlock method.";
+      ? "Change the recovery method or configure native device unlock."
+      : "Unlock the vault before changing its recovery or device-unlock method.";
     el.settingsChangePassword.textContent = vaultKey ? "Change" : "Unlock and change";
   }
   updateDriveBackupUI();
+  updateLockTimeoutCopy();
+  el.auditLogSettings.hidden = !auditLogViewEnabled;
+  el.viewAuditLog.disabled = !vaultKey;
+  el.auditLogSettingsCopy.textContent = vaultKey
+    ? `${auditLog.length} security-relevant ${auditLog.length === 1 ? "event" : "events"} recorded in this vault.`
+    : "Unlock the vault to view its security-relevant choices and lifecycle events.";
   el.vaultOptionsDialog.showModal();
+}
+
+function renderAuditLog() {
+  el.auditLogList.replaceChildren();
+  el.auditLogEmpty.hidden = auditLog.length > 0;
+  [...auditLog].reverse().forEach((entry) => {
+    const item = document.createElement("li");
+    const label = document.createElement("strong");
+    const time = document.createElement("time");
+    label.textContent = AUDIT_ACTION_LABELS[entry.action];
+    time.dateTime = entry.date;
+    time.textContent = new Date(entry.date).toLocaleString();
+    item.append(label, time);
+    el.auditLogList.append(item);
+  });
 }
 
 function updateDriveBackupUI(message = driveStatusMessage) {
@@ -616,8 +813,10 @@ function clearChangePasswordForm() {
   el.changeDeviceCopy.textContent = vaultDevice
     ? canOfferDevice
       ? "Keep device unlock enabled. You will confirm with the device while the vault keys are refreshed."
-      : "Device unlock is configured but unavailable in this browser. Turn it off to continue with passphrase-only access."
-    : "Use a passkey with Face ID, fingerprint, or your device passcode. Your new passphrase remains the recovery method.";
+      : "Device unlock is configured but unavailable in this browser. Turn it off to continue with password-only access."
+    : "Use a passkey with Face ID, fingerprint, or your device passcode. TrustCodes will generate the separate recovery code.";
+  renderPasswordStrength(el.newVaultPassword, el.changePasswordStrength);
+  setChangeRecoveryInputMode();
 }
 
 function openChangePasswordDialog() {
@@ -628,11 +827,16 @@ function openChangePasswordDialog() {
 
 function restoreUnlockedVault(unlocked) {
   vaultKey = unlocked.key;
+  const pendingAudit = readPendingAuditLog();
+  auditLog = mergeAuditLogs(unlocked.auditLog, pendingAudit);
+  pendingAuditNeedsClear = pendingAudit.length > 0;
+  clearVaultUnlockFailures();
   clearActiveContext();
   const ephemeral = entries.filter((entry) => !entry.persisted);
   const restored = unlocked.entries.map((entry) => ({ ...withoutContext(entry), persisted: true }));
   entries = [...restored, ...ephemeral];
   activeId = entries[0]?.id || null;
+  beginUnlockedSession();
   return restored;
 }
 
@@ -713,6 +917,53 @@ el.simplePhotoButton.addEventListener("click", () => {
 el.simplePhotoInput.addEventListener("change", () => applySelectedPhoto(el.simplePhotoInput));
 el.vaultSettings.addEventListener("click", openVaultOptionsDialog);
 $("#vault-options-close").addEventListener("click", () => el.vaultOptionsDialog.close());
+el.viewAuditLog.addEventListener("click", () => {
+  if (!auditLogViewEnabled || !vaultKey) return;
+  renderAuditLog();
+  el.vaultOptionsDialog.close();
+  el.auditLogDialog.showModal();
+  $("#audit-log-close").focus();
+});
+$("#audit-log-close").addEventListener("click", () => el.auditLogDialog.close());
+el.auditLogDialog.addEventListener("close", () => el.auditLogList.replaceChildren());
+el.lockTimeout.addEventListener("change", () => {
+  const requested = Number(el.lockTimeout.value);
+  if (requested === 0 && lockTimeoutMinutes !== 0) {
+    el.lockTimeout.value = String(lockTimeoutMinutes);
+    el.disableAutoLockConfirm.checked = false;
+    el.disableAutoLockSubmit.disabled = true;
+    el.vaultOptionsDialog.close();
+    el.disableAutoLockDialog.showModal();
+    el.disableAutoLockConfirm.focus();
+    return;
+  }
+  lockTimeoutMinutes = writeLockTimeout(requested);
+  updateLockTimeoutCopy();
+  scheduleInactivityLock();
+  showToast("Automatic lock setting updated");
+});
+el.disableAutoLockConfirm.addEventListener("change", () => { el.disableAutoLockSubmit.disabled = !el.disableAutoLockConfirm.checked; });
+$("#disable-auto-lock-cancel").addEventListener("click", () => {
+  el.disableAutoLockConfirm.checked = false;
+  el.disableAutoLockDialog.close();
+  updateLockTimeoutCopy();
+  requestAnimationFrame(openVaultOptionsDialog);
+});
+el.disableAutoLockForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!el.disableAutoLockConfirm.checked) return;
+  lockTimeoutMinutes = writeLockTimeout(0);
+  el.disableAutoLockDialog.close();
+  updateLockTimeoutCopy();
+  scheduleInactivityLock();
+  await recordAuditAction(AUDIT_ACTIONS.AUTOMATIC_LOCK_DISABLED);
+  showToast("Automatic locking set to Never");
+  requestAnimationFrame(openVaultOptionsDialog);
+});
+el.disableAutoLockDialog.addEventListener("cancel", () => {
+  updateLockTimeoutCopy();
+  requestAnimationFrame(openVaultOptionsDialog);
+});
 el.driveConnect.addEventListener("click", async () => {
   setDriveBusy(el.driveConnect, true, "Connecting…", "Connect");
   try {
@@ -741,6 +992,7 @@ el.driveBackup.addEventListener("click", async () => {
     const record = validateVaultBackupRecord(await getVaultRecord());
     const file = await googleDriveBackup.backup(createVaultBackupEnvelope(record));
     updateDriveBackupUI(driveFileStatus(file));
+    await recordAuditAction(AUDIT_ACTIONS.GOOGLE_DRIVE_BACKUP_COMPLETED);
     showToast("Encrypted vault backed up to Google Drive");
   } catch (error) {
     updateDriveBackupUI(error.message);
@@ -750,9 +1002,12 @@ el.driveBackup.addEventListener("click", async () => {
   }
 });
 el.driveRestoreOpen.addEventListener("click", async () => {
+  const operationEpoch = securityEpoch;
   setDriveBusy(el.driveRestoreOpen, true, "Checking…", "Restore…");
   try {
-    pendingDriveRestore = await googleDriveBackup.restore(validateVaultBackupRecord);
+    const restoredBackup = await googleDriveBackup.restore(validateVaultBackupRecord);
+    if (operationWasLocked(operationEpoch)) return;
+    pendingDriveRestore = restoredBackup;
     const backedUp = new Date(pendingDriveRestore.envelope.lastBackedUpAt).toLocaleString();
     el.driveRestoreCopy.textContent = vaultPresent
       ? `This vault was last backed up ${backedUp}. It will replace the encrypted vault currently saved in this browser.`
@@ -790,14 +1045,16 @@ el.driveRestoreForm.addEventListener("submit", async (event) => {
     clearActiveContext();
     entries = entries.filter((entry) => !entry.persisted);
     vaultKey = null;
+    auditLog = [];
     vaultPresent = true;
     vaultDevice = await getVaultDevice();
+    await recordAuditAction(AUDIT_ACTIONS.GOOGLE_DRIVE_RESTORE_COMPLETED);
     activeId = entries[0]?.id || null;
     resetDriveRestoreDialog();
     el.driveRestoreDialog.close();
     renderWorkspace();
     updateVaultUI();
-    showToast("Encrypted vault restored; unlock it with its recovery passphrase");
+    showToast("Encrypted vault restored; unlock it with its recovery password, code, or passkey");
     requestAnimationFrame(openVaultDialog);
   } catch (error) {
     el.driveRestoreError.textContent = error.message;
@@ -817,29 +1074,34 @@ $("#change-password-cancel").addEventListener("click", () => { clearChangePasswo
   el.changePasswordError.textContent = "";
   el.changePasswordError.hidden = true;
 }));
+el.newVaultPassword.addEventListener("input", () => renderPasswordStrength(el.newVaultPassword, el.changePasswordStrength));
+el.changeDeviceUnlock.addEventListener("change", setChangeRecoveryInputMode);
 el.changePasswordForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  const operationEpoch = securityEpoch;
   if (!vaultKey || !vaultPresent) {
-    el.changePasswordError.textContent = "Unlock the encrypted vault before changing its passphrase.";
+    el.changePasswordError.textContent = "Unlock the encrypted vault before changing its recovery method.";
     el.changePasswordError.hidden = false;
     return;
   }
   const currentPassphrase = el.currentVaultPassword.value;
-  const newPassphrase = el.newVaultPassword.value;
-  const passphraseProblem = vaultPassphraseProblem(newPassphrase);
+  const generatedRecovery = el.changeDeviceUnlock.checked;
+  const newPassphrase = generatedRecovery ? generateVaultRecoveryCode() : el.newVaultPassword.value;
+  const recoveryAuditAction = generatedRecovery ? null : warnedRecoveryAuditAction(newPassphrase);
+  const passphraseProblem = generatedRecovery ? "" : vaultPassphraseProblem(newPassphrase);
   if (passphraseProblem) {
     el.changePasswordError.textContent = passphraseProblem;
     el.changePasswordError.hidden = false;
     return;
   }
-  if (newPassphrase !== el.confirmNewVaultPassword.value) {
-    el.changePasswordError.textContent = "The new passphrase confirmation does not match.";
+  if (!generatedRecovery && newPassphrase !== el.confirmNewVaultPassword.value) {
+    el.changePasswordError.textContent = "The new recovery-password confirmation does not match.";
     el.changePasswordError.hidden = false;
     el.confirmNewVaultPassword.select();
     return;
   }
-  if (newPassphrase === currentPassphrase) {
-    el.changePasswordError.textContent = "Choose a different passphrase.";
+  if (!generatedRecovery && newPassphrase === currentPassphrase) {
+    el.changePasswordError.textContent = "Choose a different recovery password.";
     el.changePasswordError.hidden = false;
     return;
   }
@@ -847,27 +1109,38 @@ el.changePasswordForm.addEventListener("submit", async (event) => {
   el.changePasswordSubmit.textContent = "Re-encrypting…";
   try {
     const current = await unlockVault(currentPassphrase);
+    if (operationWasLocked(operationEpoch)) return;
     let deviceAccess = null;
     if (el.changeDeviceUnlock.checked) {
-      if (!deviceUnlockCapable) throw new Error("Device unlock is not available in this browser. Turn it off to continue with passphrase-only access.");
+      if (!deviceUnlockCapable) throw new Error("Device unlock is not available in this browser. Turn it off to continue with password-only access.");
       el.changePasswordSubmit.textContent = vaultDevice ? "Confirm on device…" : "Creating device unlock…";
       deviceAccess = vaultDevice ? await getDeviceUnlock(vaultDevice) : await createDeviceUnlock();
+      if (operationWasLocked(operationEpoch)) return;
     }
     const persisted = entries.filter((entry) => entry.persisted).map(withoutContext);
     el.changePasswordSubmit.textContent = "Re-encrypting…";
-    vaultKey = await updateVaultCredentials(current.key, newPassphrase, persisted, deviceAccess);
+    let nextAuditLog = appendAuditLog(auditLog, AUDIT_ACTIONS.VAULT_RECOVERY_CHANGED);
+    if (!vaultDevice && deviceAccess) nextAuditLog = appendAuditLog(nextAuditLog, AUDIT_ACTIONS.DEVICE_UNLOCK_ENABLED);
+    if (vaultDevice && !deviceAccess) nextAuditLog = appendAuditLog(nextAuditLog, AUDIT_ACTIONS.DEVICE_UNLOCK_REMOVED);
+    if (recoveryAuditAction) nextAuditLog = appendAuditLog(nextAuditLog, recoveryAuditAction);
+    const updatedKey = await updateVaultCredentials(current.key, newPassphrase, persisted, deviceAccess, nextAuditLog);
+    if (operationWasLocked(operationEpoch)) return;
+    vaultKey = updatedKey;
+    auditLog = nextAuditLog;
     vaultDevice = await getVaultDevice();
     clearChangePasswordForm();
     el.changePasswordDialog.close();
     updateVaultUI();
-    showToast(vaultDevice ? "Vault passphrase and device unlock updated" : "Vault passphrase changed");
+    beginUnlockedSession();
+    showToast(vaultDevice ? "Vault recovery and device unlock updated" : "Vault recovery password changed");
+    if (generatedRecovery) requestAnimationFrame(() => showRecoveryCode(newPassphrase));
   } catch (error) {
     el.changePasswordError.textContent = error.message;
     el.changePasswordError.hidden = false;
     el.currentVaultPassword.select();
   } finally {
     el.changePasswordSubmit.disabled = false;
-    el.changePasswordSubmit.textContent = "Change passphrase";
+    el.changePasswordSubmit.textContent = "Change recovery";
   }
 });
 
@@ -902,9 +1175,12 @@ el.purgeVaultForm.addEventListener("submit", async (event) => {
   el.purgeVaultSubmit.textContent = "Purging…";
   try {
     await purgeVault();
+    clearPendingAuditLog();
+    clearVaultUnlockFailures();
     clearActiveContext();
     entries = entries.filter((entry) => !entry.persisted);
     vaultKey = null;
+    auditLog = [];
     vaultDevice = null;
     vaultPresent = false;
     activeId = entries[0]?.id || null;
@@ -923,12 +1199,17 @@ el.purgeVaultForm.addEventListener("submit", async (event) => {
 });
 
 async function createConfiguredChannel(config) {
+  const operationEpoch = securityEpoch;
   const button = $("#create-channel");
   button.disabled = true; button.textContent = "Preparing secure channel…";
   try {
     const pair = await createChannelPair(config);
+    if (operationWasLocked(operationEpoch)) return;
     pair.local.persisted = el.saveChannel.checked && Boolean(vaultKey);
     await presentForSharing(pair.local, pair.peer);
+    if (operationWasLocked(operationEpoch)) return;
+    const format = config.scheme === "proof" ? "words" : config.format;
+    if (entropyBits(format, config.length) < 55) await recordAuditAction(AUDIT_ACTIONS.LOW_STRENGTH_CODE_CREATED);
   } catch (error) { showError(error.message); }
   finally { button.disabled = false; button.innerHTML = 'Create private channel <span aria-hidden="true">→</span>'; }
 }
@@ -984,28 +1265,26 @@ el.showImport.addEventListener("click", () => { stopCameraScanner(); el.setupSta
 $("#cancel-import").addEventListener("click", resetSetupViews);
 $("#cancel-share").addEventListener("click", resetSetupViews);
 $("#import-channel").addEventListener("click", async () => {
+  const operationEpoch = securityEpoch;
   const button = $("#import-channel");
   button.disabled = true;
   button.textContent = "Checking setup…";
   clearError();
   try {
     const setupCode = el.importCode.value.trim();
-    if (isProtectedSetupCode(setupCode)) {
-      const entry = await decodeProtectedSetupCode(setupCode, el.importSetupPassphrase.value);
-      entry.persisted = el.saveImport.checked && Boolean(vaultKey);
-      pendingImportEntry = entry;
-      el.importSetupFingerprint.textContent = await setupFingerprint(setupCode);
-      el.importSetupPassphrase.value = "";
-      stopCameraScanner();
-      el.setupFingerprintConfirmed.checked = false;
-      el.setupFingerprintSubmit.disabled = true;
-      el.setupFingerprintDialog.showModal();
-      el.setupFingerprintConfirmed.focus();
-      return;
-    }
-    const entry = decodeSetupCode(setupCode);
+    if (!isProtectedSetupCode(setupCode)) throw new Error("Enter an authenticated TrustCodes setup code beginning with TC2-.");
+    const entry = await decodeProtectedSetupCode(setupCode, el.importSetupPassphrase.value);
+    if (operationWasLocked(operationEpoch)) return;
     entry.persisted = el.saveImport.checked && Boolean(vaultKey);
-    stopCameraScanner(); addEntry(entry); el.importCode.value = ""; el.importSetupPassphrase.value = ""; switchTab("use"); showToast("Legacy unauthenticated trust channel imported");
+    pendingImportEntry = entry;
+    el.importSetupFingerprint.textContent = await setupFingerprint(setupCode);
+    if (operationWasLocked(operationEpoch)) return;
+    el.importSetupPassphrase.value = "";
+    stopCameraScanner();
+    el.setupFingerprintConfirmed.checked = false;
+    el.setupFingerprintSubmit.disabled = true;
+    el.setupFingerprintDialog.showModal();
+    el.setupFingerprintConfirmed.focus();
   } catch (error) { showError(error.message); }
   finally {
     button.disabled = false;
@@ -1042,7 +1321,6 @@ el.setupFingerprintForm.addEventListener("submit", (event) => {
 });
 
 $("#copy-setup").addEventListener("click", () => copyText(el.setupCode.textContent, "Setup code copied"));
-$("#copy-setup-passphrase").addEventListener("click", () => copyText(el.setupPassphrase.textContent, "One-time setup passphrase copied"));
 el.showSetupQr.addEventListener("click", () => {
   try {
     drawQrCode(el.setupCode.textContent, el.setupQr);
@@ -1143,28 +1421,56 @@ $("#forget-channel").addEventListener("click", async () => {
 });
 
 el.vaultAction.addEventListener("click", openVaultDialog);
-el.vaultLock.addEventListener("click", () => {
-  clearActiveContext();
-  clearVaultCredentialInputs();
-  entries = entries.filter((entry) => !entry.persisted);
-  vaultKey = null; activeId = entries[0]?.id || null; renderWorkspace(); updateVaultUI(); showToast("Encrypted vault locked");
-});
+el.vaultLock.addEventListener("click", () => secureLock("Encrypted vault securely locked"));
 $("#vault-cancel").addEventListener("click", () => { openVaultOptionsAfterUnlock = false; el.vaultDialog.close(); });
 el.vaultDialog.addEventListener("cancel", () => { openVaultOptionsAfterUnlock = false; });
 el.vaultDialog.addEventListener("close", clearVaultCredentialInputs);
 el.changePasswordDialog.addEventListener("close", clearVaultCredentialInputs);
+el.vaultPassphrase.addEventListener("input", () => renderPasswordStrength(el.vaultPassphrase, el.vaultPasswordStrength));
+el.vaultDeviceUnlock.addEventListener("change", setVaultRecoveryInputMode);
+el.recoveryCodeSaved.addEventListener("change", () => { el.recoveryCodeClose.disabled = !el.recoveryCodeSaved.checked; });
+el.recoveryCodeDialog.addEventListener("cancel", (event) => event.preventDefault());
+el.recoveryCodeDialog.addEventListener("close", clearRecoveryCode);
+el.recoveryCodeForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  if (!el.recoveryCodeSaved.checked) return;
+  el.recoveryCodeDialog.close();
+});
+el.downloadRecoveryCode.addEventListener("click", async () => {
+  if (!recoveryCode) return;
+  const content = `TrustCodes recovery code\n\n${recoveryCode}\n\nCreated: ${new Date().toISOString()}\n\nKeep this file private. This code can unlock your encrypted TrustCodes vault.\n`;
+  const url = URL.createObjectURL(new Blob([content], { type: "text/plain;charset=utf-8" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `trustcodes-recovery-code-${new Date().toISOString().slice(0, 10)}.txt`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+  await recordAuditAction(AUDIT_ACTIONS.RECOVERY_CODE_DOWNLOADED);
+  showToast("Recovery code downloaded locally");
+});
 el.vaultDeviceSubmit.addEventListener("click", async () => {
+  const operationEpoch = securityEpoch;
   el.vaultDeviceSubmit.disabled = true;
   el.vaultDeviceSubmit.textContent = "Confirm on device…";
   el.vaultError.hidden = true;
   try {
     const deviceAccess = await getDeviceUnlock(vaultDevice);
+    if (operationWasLocked(operationEpoch)) return;
     const unlocked = await unlockVaultWithDevice(deviceAccess);
+    if (operationWasLocked(operationEpoch)) return;
     const restored = restoreUnlockedVault(unlocked);
-    await saveVault(vaultKey, restored.map(withoutContext));
+    await saveVault(vaultKey, restored.map(withoutContext), auditLog);
+    if (pendingAuditNeedsClear) {
+      clearPendingAuditLog();
+      pendingAuditNeedsClear = false;
+    }
+    if (operationWasLocked(operationEpoch)) return;
     el.vaultDialog.close();
     updateVaultUI();
     renderWorkspace();
+    scheduleInactivityLock();
     showToast("Encrypted vault unlocked with this device");
     if (openVaultOptionsAfterUnlock) {
       openVaultOptionsAfterUnlock = false;
@@ -1175,13 +1481,16 @@ el.vaultDeviceSubmit.addEventListener("click", async () => {
 });
 el.vaultForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  const operationEpoch = securityEpoch;
   const creating = el.vaultDialog.dataset.mode === "create";
-  const passphrase = el.vaultPassphrase.value;
-  if (creating) {
+  const generatedRecovery = creating && el.vaultDeviceUnlock.checked;
+  const passphrase = generatedRecovery ? generateVaultRecoveryCode() : el.vaultPassphrase.value;
+  const recoveryAuditAction = creating && !generatedRecovery ? warnedRecoveryAuditAction(passphrase) : null;
+  if (creating && !generatedRecovery) {
     const passphraseProblem = vaultPassphraseProblem(passphrase);
     if (passphraseProblem) return showVaultError(passphraseProblem);
   }
-  if (creating && passphrase !== el.vaultConfirm.value) return showVaultError("The confirmation does not match.");
+  if (creating && !generatedRecovery && passphrase !== el.vaultConfirm.value) return showVaultError("The confirmation does not match.");
   el.vaultSubmit.disabled = true; el.vaultSubmit.textContent = creating ? "Creating…" : "Unlocking…";
   try {
     if (creating) {
@@ -1189,17 +1498,44 @@ el.vaultForm.addEventListener("submit", async (event) => {
       if (el.vaultDeviceUnlock.checked) {
         el.vaultSubmit.textContent = "Creating device unlock…";
         deviceAccess = await createDeviceUnlock();
+        if (operationWasLocked(operationEpoch)) return;
       }
       el.vaultSubmit.textContent = "Creating…";
-      vaultKey = await createVault(passphrase, [], deviceAccess);
+      const pendingAudit = readPendingAuditLog();
+      let initialAuditLog = mergeAuditLogs(pendingAudit);
+      if (deviceAccess) initialAuditLog = appendAuditLog(initialAuditLog, AUDIT_ACTIONS.DEVICE_UNLOCK_ENABLED);
+      if (recoveryAuditAction) initialAuditLog = appendAuditLog(initialAuditLog, recoveryAuditAction);
+      const createdKey = await createVault(passphrase, [], deviceAccess, initialAuditLog);
+      if (operationWasLocked(operationEpoch)) {
+        vaultPresent = true;
+        vaultDevice = await getVaultDevice();
+        updateVaultUI();
+        return;
+      }
+      vaultKey = createdKey;
+      auditLog = initialAuditLog;
+      clearPendingAuditLog();
       vaultPresent = true;
       vaultDevice = await getVaultDevice();
     } else {
-      const unlocked = await unlockVault(passphrase);
+      let unlocked;
+      try {
+        unlocked = await unlockVault(passphrase);
+      } catch (error) {
+        if (noteVaultUnlockFailure()) await recordAuditAction(AUDIT_ACTIONS.REPEATED_VAULT_UNLOCK_FAILURES);
+        throw error;
+      }
+      if (operationWasLocked(operationEpoch)) return;
       const restored = restoreUnlockedVault(unlocked);
-      await saveVault(vaultKey, restored.map(withoutContext));
+      await saveVault(vaultKey, restored.map(withoutContext), auditLog);
+      if (pendingAuditNeedsClear) {
+        clearPendingAuditLog();
+        pendingAuditNeedsClear = false;
+      }
+      if (operationWasLocked(operationEpoch)) return;
     }
-    el.vaultDialog.close(); updateVaultUI(); renderWorkspace(); showToast(creating ? "Encrypted vault created" : "Encrypted vault unlocked");
+    el.vaultDialog.close(); updateVaultUI(); renderWorkspace(); beginUnlockedSession(); showToast(creating ? "Encrypted vault created" : "Encrypted vault unlocked");
+    if (creating && generatedRecovery) requestAnimationFrame(() => showRecoveryCode(passphrase));
     if (!creating && openVaultOptionsAfterUnlock) {
       openVaultOptionsAfterUnlock = false;
       requestAnimationFrame(openChangePasswordDialog);
@@ -1208,7 +1544,11 @@ el.vaultForm.addEventListener("submit", async (event) => {
   finally { el.vaultSubmit.disabled = false; el.vaultSubmit.textContent = creating ? "Create encrypted vault" : "Unlock vault"; }
 });
 
-document.addEventListener("visibilitychange", () => { if (document.hidden) stopCameraScanner(); });
-window.addEventListener("pagehide", () => stopCameraScanner());
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) stopCameraScanner();
+  scheduleInactivityLock();
+});
+window.addEventListener("pagehide", () => secureLock("Encrypted vault securely locked"));
+["pointerdown", "keydown", "touchstart"].forEach((eventName) => document.addEventListener(eventName, noteActivity, { passive: true }));
 
-updateStrengthOptions(); updateProofStrengthOptions(); updateScheme(); renderWorkspace(); initializeVault(); renderBuildVersion(); tick(); setInterval(tick, 250);
+updateStrengthOptions(); updateProofStrengthOptions(); updateScheme(); updateLockTimeoutCopy(); renderWorkspace(); initializeVault(); renderBuildVersion(); tick(); setInterval(tick, 250);

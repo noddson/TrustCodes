@@ -8,12 +8,10 @@ import {
   decodeBase32,
   decodeBase64Url,
   decodeProtectedSetupCode,
-  decodeSetupCode,
   encodeBase32,
   encodeBase64Url,
   encodeCrockfordBase32,
   encodeProtectedSetupCode,
-  encodeSetupCode,
   formatDigest,
   generateSetupPassphrase,
   generateMutualCode,
@@ -29,6 +27,11 @@ import {
 } from "./otp.js";
 
 const SECRET = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
+
+async function roundTripSetup(entry) {
+  const passphrase = generateSetupPassphrase();
+  return decodeProtectedSetupCode(await encodeProtectedSetupCode(entry, passphrase), passphrase);
+}
 
 test("the word dictionary has 2,048 unique BIP-39 entries", () => {
   assert.equal(WORDS.length, 2048);
@@ -92,14 +95,11 @@ test("TOTP verifier accepts the adjacent time window", async () => {
 
 test("setup codes omit context while manually matching contexts still interoperate", async () => {
   const { local, peer } = await createChannelPair({ name: "Spouses", context: "calls", scheme: "mutual", method: "totp", format: "words", length: 5 });
-  const encoded = encodeSetupCode(peer);
-  const payload = JSON.parse(new TextDecoder().decode(decodeBase64Url(encoded.slice(4))));
-  const imported = decodeSetupCode(encoded);
-  assert.equal(payload.v, 6);
-  assert.equal(payload.x, undefined);
-  assert.equal(payload.h, undefined);
-  assert.equal(payload.w, 1);
-  assert.equal(decodeBase64Url(payload.s).length, 16);
+  const passphrase = generateSetupPassphrase();
+  const encoded = await encodeProtectedSetupCode(peer, passphrase);
+  const envelopeText = new TextDecoder().decode(decodeBase64Url(encoded.slice(4)));
+  const imported = await decodeProtectedSetupCode(encoded, passphrase);
+  assert.equal(envelopeText.includes("calls"), false);
   assert.equal(imported.scheme, "mutual");
   assert.equal(imported.context, undefined);
   assert.equal(local.context, undefined);
@@ -160,13 +160,12 @@ test("blank setup context preserves normal mutual behavior", async () => {
   assert.equal(await generateMutualCode(local), await generateMutualCode(peer));
 });
 
-test("legacy setup codes discard embedded context and require live re-entry", async () => {
-  const payload = { v: 3, q: "mutual", n: "Legacy", x: "old embedded context", m: "hotp", k: SECRET, p: 30, c: 0, f: "numeric", l: 6, d: 1 };
-  const code = `TC1-${encodeBase64Url(new TextEncoder().encode(JSON.stringify(payload)))}`;
-  const imported = decodeSetupCode(code);
-  assert.equal(imported.context, undefined);
-  assert.equal(imported.contextProtection, undefined);
-  assert.equal(await generateMutualCode(imported, 0, 0, "old embedded context"), await generateMutualCode({ ...imported, context: "old embedded context" }, 0, 0));
+test("unauthenticated TC1 setup codes are rejected", async () => {
+  const code = `TC1-${encodeBase64Url(new TextEncoder().encode("legacy"))}`;
+  assert.equal(isProtectedSetupCode(code), false);
+  assert.equal(validateProtectedSetupCode(code), false);
+  await assert.rejects(decodeProtectedSetupCode(code, generateSetupPassphrase()), /incorrect|damaged|unsupported/i);
+  await assert.rejects(setupFingerprint(code), /damaged|unsupported/i);
 });
 
 test("one-way setup sends an anchor to the verifier, not the seed", async () => {
@@ -176,7 +175,7 @@ test("one-way setup sends an anchor to the verifier, not the seed", async () => 
   assert.ok(peer.anchor);
   assert.equal(peer.seed, undefined);
 
-  const importedVerifier = decodeSetupCode(encodeSetupCode(peer));
+  const importedVerifier = await roundTripSetup(peer);
   assert.equal(importedVerifier.role, "verify");
   assert.ok(importedVerifier.anchor);
   assert.equal(importedVerifier.seed, undefined);
@@ -184,7 +183,7 @@ test("one-way setup sends an anchor to the verifier, not the seed", async () => 
 
 test("one-way phrases verify once and advance in lockstep", async () => {
   const { local: prover, peer: verifierSetup } = await createChannelPair({ name: "Dad", context: "family calls", scheme: "proof", role: "prove", total: 3, length: 5 });
-  const verifier = decodeSetupCode(encodeSetupCode(verifierSetup));
+  const verifier = await roundTripSetup(verifierSetup);
   assert.equal(prover.context, undefined);
   assert.equal(verifier.context, undefined);
   const first = await generateProofPhrase(prover, "family calls");
@@ -204,7 +203,7 @@ test("all one-way proof strengths from 5 through 10 words round-trip and verify"
   for (const length of [5, 6, 7, 8, 9, 10]) {
     await t.test(`${length} words`, async () => {
       const { local: prover, peer } = await createChannelPair({ name: "Range", context: "strength", scheme: "proof", role: "prove", total: 2, length });
-      const verifier = decodeSetupCode(encodeSetupCode(peer));
+      const verifier = await roundTripSetup(peer);
       const phrase = await generateProofPhrase(prover, "strength");
       assert.equal(phrase.split(" ").length, length);
       assert.equal(verifier.length, length);
@@ -213,25 +212,24 @@ test("all one-way proof strengths from 5 through 10 words round-trip and verify"
   }
 });
 
-test("four-word one-way proofs can no longer be created", async () => {
+test("four-word one-way proofs can no longer be created or imported", async () => {
   await assert.rejects(
     createChannelPair({ name: "Too weak", context: "", scheme: "proof", role: "prove", total: 2, length: 4 }),
     /between 5 and 10 words/i,
   );
 
-  const legacyFourWordSetup = {
-    v: 5,
-    q: "proof",
-    n: "Legacy weak proof",
-    r: "verify",
-    z: encodeBase64Url(new Uint8Array(6)),
-    e: 2,
-    t: 2,
-    l: 4,
-    d: 1,
+  const weakVerifier = {
+    scheme: "proof",
+    name: "Weak proof",
+    role: "verify",
+    anchor: encodeBase64Url(new Uint8Array(6)),
+    remaining: 2,
+    total: 2,
+    length: 4,
   };
-  const code = `TC1-${encodeBase64Url(new TextEncoder().encode(JSON.stringify(legacyFourWordSetup)))}`;
-  assert.throws(() => decodeSetupCode(code), /damaged|unsupported/i);
+  const passphrase = generateSetupPassphrase();
+  const code = await encodeProtectedSetupCode(weakVerifier, passphrase);
+  await assert.rejects(decodeProtectedSetupCode(code, passphrase), /incorrect|damaged|unsupported/i);
 });
 
 test("a different proof context fails verification", async () => {

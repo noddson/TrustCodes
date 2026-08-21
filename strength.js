@@ -27,5 +27,5 @@ export function entropyClassification(bits) {
 
 export function strengthOptionLabel(format, length) {
   const unit = format === "words" ? "words" : "characters";
-  return `${length} ${unit} · ${entropyClassification(entropyBits(format, length))}`;
+  return `${length} ${unit} · ${entropyBits(format, length)} bits`;
 }

@@ -5,7 +5,7 @@ let decoderPromise;
 
 export function normalizeScannedSetupCode(value) {
   const text = String(value || "").trim();
-  if (!/^TC[12]-/.test(text) || text.length > 20_000) return "";
+  if (!text.startsWith("TC2-") || text.length > 20_000) return "";
   return text;
 }
 

@@ -12,8 +12,8 @@ const SETUP_AAD = encoder.encode("TrustCodes/AuthenticatedSetup/v1");
 export const SETUP_KDF_ITERATIONS = 600_000;
 export const SETUP_PASSPHRASE_WORDS = 8;
 export const SETUP_FINGERPRINT_HEX_DIGITS = 12;
-const proofCaches = new WeakMap();
-const contextKeyCaches = new WeakMap();
+let proofCaches = new WeakMap();
+let contextKeyCaches = new WeakMap();
 
 function encodeWithAlphabet(bytes, alphabet) {
   let bits = 0, value = 0, output = "";
@@ -311,6 +311,11 @@ export function clearProofCache(entry) {
   contextKeyCaches.delete(entry);
 }
 
+export function clearSensitiveCaches() {
+  proofCaches = new WeakMap();
+  contextKeyCaches = new WeakMap();
+}
+
 export async function generateProofPhrase(entry, context = entry.context || "") {
   if (entry.scheme !== "proof" || entry.role !== "prove") throw new Error("This entry cannot generate proofs.");
   if (!PROOF_WORD_LENGTHS.includes(entry.length)) throw new Error("This proof phrase strength is no longer supported. Create a new channel with 5 to 10 words.");
@@ -513,26 +518,10 @@ export async function decodeProtectedSetupCode(input, passphrase) {
 
 export async function setupFingerprint(input) {
   const value = String(input || "").trim();
-  if (value.length > 20_000 || (!value.startsWith("TC1-") && !value.startsWith("TC2-"))) {
+  if (value.length > 20_000 || !value.startsWith("TC2-")) {
     throw new Error("That setup code is damaged or unsupported.");
   }
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", encoder.encode(value)));
   const hex = Array.from(digest.slice(0, SETUP_FINGERPRINT_HEX_DIGITS / 2), (byte) => byte.toString(16).padStart(2, "0")).join("").toUpperCase();
   return hex.match(/.{4}/g).join("-");
-}
-
-export function encodeSetupCode(entry) {
-  return `TC1-${encodeBase64Url(encoder.encode(JSON.stringify(serializableEntry(entry))))}`;
-}
-
-export function decodeSetupCode(input) {
-  const value = input.trim();
-  if (!value.startsWith("TC1-")) throw new Error("A TrustCodes setup code begins with TC1-.");
-  if (value.length > 20_000) throw new Error("That setup code is too large.");
-  try {
-    const data = JSON.parse(new TextDecoder().decode(decodeBase64Url(value.slice(4))));
-    return entryFromSetupData(data);
-  } catch {
-    throw new Error("That setup code is damaged, incomplete, or unsupported.");
-  }
 }

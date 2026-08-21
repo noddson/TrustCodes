@@ -1,11 +1,13 @@
 import { decodeBase64Url, encodeBase64Url } from "./otp.js";
+import { assessVaultPassword, VAULT_PASSWORD_MAX_LENGTH, VAULT_PASSWORD_MIN_LENGTH } from "./vault-password.js";
+import { validateAuditLog } from "./audit-log.js";
+
+export { VAULT_PASSWORD_MAX_LENGTH, VAULT_PASSWORD_MIN_LENGTH } from "./vault-password.js";
 
 const DB_NAME = "trust-codes-vault";
 const STORE_NAME = "vault";
 const RECORD_ID = "primary";
 export const VAULT_ITERATIONS = 600_000;
-export const VAULT_PASSWORD_MIN_LENGTH = 12;
-export const VAULT_PASSWORD_MAX_LENGTH = 64;
 const AAD_V1 = new TextEncoder().encode("TrustCodesVault/v1");
 const AAD_V2 = new TextEncoder().encode("TrustCodesVault/v2");
 const PASSWORD_WRAP_AAD = new TextEncoder().encode("TrustCodesVault/password-wrap/v1");
@@ -14,20 +16,12 @@ const DEVICE_KDF_INFO = new TextEncoder().encode("TrustCodesVault/WebAuthn-PRF/v
 const MAX_VAULT_CIPHERTEXT_CHARACTERS = 24 * 1024 * 1024;
 
 export function vaultPassphraseProblem(passphrase) {
-  const value = String(passphrase || "").normalize("NFC");
-  const length = [...value].length;
-  if (length < VAULT_PASSWORD_MIN_LENGTH) return `Use at least ${VAULT_PASSWORD_MIN_LENGTH} characters.`;
-  if (length > VAULT_PASSWORD_MAX_LENGTH) return `Use no more than ${VAULT_PASSWORD_MAX_LENGTH} characters.`;
-  if (!/\p{Lu}/u.test(value)) return "Include at least one uppercase letter.";
-  if (!/\p{Ll}/u.test(value)) return "Include at least one lowercase letter.";
-  if (!/\p{N}/u.test(value)) return "Include at least one number.";
-  if (!/[^\p{L}\p{N}\s]/u.test(value)) return "Include at least one symbol, such as !, @, #, $, %, or &.";
-  return "";
+  return assessVaultPassword(passphrase).problem;
 }
 
 function requireStrongVaultPassphrase(passphrase) {
   const problem = vaultPassphraseProblem(passphrase);
-  if (problem) throw new Error(`The vault passphrase is not strong enough. ${problem}`);
+  if (problem) throw new Error(`The vault recovery secret is not strong enough. ${problem}`);
 }
 
 function checkedBase64Url(value, label, expectedBytes = null, maximumCharacters = 4096) {
@@ -186,29 +180,35 @@ async function importDataKey(rawKey) {
   return crypto.subtle.importKey("raw", rawKey, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
 }
 
-export async function encryptVaultEntries(entries, key, iv = crypto.getRandomValues(new Uint8Array(12)), additionalData = AAD_V1) {
+export async function encryptVaultEntries(entries, key, iv = crypto.getRandomValues(new Uint8Array(12)), additionalData = AAD_V1, auditLog = []) {
   const safeEntries = entries.map((entry) => {
     const { context, contextRequired, ...safe } = entry;
     return safe;
   });
-  const plaintext = new TextEncoder().encode(JSON.stringify(safeEntries));
+  const payload = { payloadVersion: 1, entries: safeEntries, auditLog: validateAuditLog(auditLog) };
+  const plaintext = new TextEncoder().encode(JSON.stringify(payload));
   const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData }, key, plaintext);
   return { iv: encodeBase64Url(iv), ciphertext: encodeBase64Url(new Uint8Array(ciphertext)) };
 }
 
-export async function decryptVaultEntries(record, key, additionalData = AAD_V1) {
+export async function decryptVaultPayload(record, key, additionalData = AAD_V1) {
   try {
     const plaintext = await crypto.subtle.decrypt(
       { name: "AES-GCM", iv: decodeBase64Url(record.iv), additionalData },
       key,
       decodeBase64Url(record.ciphertext),
     );
-    const entries = JSON.parse(new TextDecoder().decode(plaintext));
-    if (!Array.isArray(entries)) throw new Error();
-    return entries;
+    const payload = JSON.parse(new TextDecoder().decode(plaintext));
+    if (Array.isArray(payload)) return { entries: payload, auditLog: [] };
+    if (!payload || payload.payloadVersion !== 1 || !Array.isArray(payload.entries)) throw new Error();
+    return { entries: payload.entries, auditLog: validateAuditLog(payload.auditLog) };
   } catch {
-    throw new Error("The vault passphrase or device unlock is incorrect, or the vault data is damaged.");
+    throw new Error("The vault recovery secret or device unlock is incorrect, or the vault data is damaged.");
   }
+}
+
+export async function decryptVaultEntries(record, key, additionalData = AAD_V1) {
+  return (await decryptVaultPayload(record, key, additionalData)).entries;
 }
 
 function supportedV1(record) {
@@ -222,11 +222,11 @@ function supportedV2(record) {
     && record.password?.wrappedKey;
 }
 
-async function decryptEntriesForRecord(record, key) {
-  return decryptVaultEntries(record, key, record.version === 2 ? AAD_V2 : AAD_V1);
+async function decryptPayloadForRecord(record, key) {
+  return decryptVaultPayload(record, key, record.version === 2 ? AAD_V2 : AAD_V1);
 }
 
-async function makeV2Record(passphrase, entries, deviceAccess = null) {
+async function makeV2Record(passphrase, entries, deviceAccess = null, auditLog = []) {
   const rawDataKey = crypto.getRandomValues(new Uint8Array(32));
   const dataKey = await importDataKey(rawDataKey);
   const passwordSalt = crypto.getRandomValues(new Uint8Array(16));
@@ -261,14 +261,14 @@ async function makeV2Record(passphrase, entries, deviceAccess = null) {
       cipher: "AES-256-GCM",
       password,
       ...(device ? { device } : {}),
-      ...await encryptVaultEntries(entries, dataKey, undefined, AAD_V2),
+      ...await encryptVaultEntries(entries, dataKey, undefined, AAD_V2, auditLog),
     },
   };
 }
 
-export async function createVault(passphrase, entries = [], deviceAccess = null) {
+export async function createVault(passphrase, entries = [], deviceAccess = null, auditLog = []) {
   requireStrongVaultPassphrase(passphrase);
-  const next = await makeV2Record(passphrase, entries, deviceAccess);
+  const next = await makeV2Record(passphrase, entries, deviceAccess, auditLog);
   await withStore("readwrite", (store) => store.put(next.record));
   return next.key;
 }
@@ -277,7 +277,7 @@ export async function unlockVault(passphrase) {
   const record = await getVaultRecord();
   if (supportedV1(record)) {
     const key = await deriveVaultKey(passphrase, decodeBase64Url(record.salt), record.iterations);
-    return { key, entries: await decryptVaultEntries(record, key) };
+    return { key, ...await decryptVaultPayload(record, key) };
   }
   if (!supportedV2(record)) throw new Error("No supported encrypted vault was found.");
   try {
@@ -285,9 +285,9 @@ export async function unlockVault(passphrase) {
     const rawDataKey = await decryptBytes(record.password.wrappedKey, passwordKey, PASSWORD_WRAP_AAD);
     const key = await importDataKey(rawDataKey);
     rawDataKey.fill(0);
-    return { key, entries: await decryptEntriesForRecord(record, key) };
+    return { key, ...await decryptPayloadForRecord(record, key) };
   } catch {
-    throw new Error("The vault passphrase is incorrect or the vault data is damaged.");
+    throw new Error("The vault recovery secret is incorrect or the vault data is damaged.");
   }
 }
 
@@ -302,31 +302,31 @@ export async function unlockVaultWithDevice(deviceAccess) {
     const rawDataKey = await decryptBytes(record.device.wrappedKey, deviceKey, DEVICE_WRAP_AAD);
     const key = await importDataKey(rawDataKey);
     rawDataKey.fill(0);
-    return { key, entries: await decryptEntriesForRecord(record, key) };
+    return { key, ...await decryptPayloadForRecord(record, key) };
   } catch {
-    throw new Error("Device unlock could not decrypt this vault. Use the recovery passphrase instead.");
+    throw new Error("Device unlock could not decrypt this vault. Use the recovery password or code instead.");
   }
 }
 
-export async function updateVaultCredentials(currentKey, newPassphrase, entries, deviceAccess = null) {
+export async function updateVaultCredentials(currentKey, newPassphrase, entries, deviceAccess = null, auditLog = null) {
   requireStrongVaultPassphrase(newPassphrase);
   const record = await getVaultRecord();
   if (!record || (!supportedV1(record) && !supportedV2(record))) throw new Error("No supported encrypted vault was found.");
-  await decryptEntriesForRecord(record, currentKey);
-  const next = await makeV2Record(newPassphrase, entries, deviceAccess);
+  const currentPayload = await decryptPayloadForRecord(record, currentKey);
+  const next = await makeV2Record(newPassphrase, entries, deviceAccess, auditLog ?? currentPayload.auditLog);
   await withStore("readwrite", (store) => store.put(next.record));
   return next.key;
 }
 
-export async function changeVaultPassphrase(currentPassphrase, newPassphrase, entries, deviceAccess = null) {
+export async function changeVaultPassphrase(currentPassphrase, newPassphrase, entries, deviceAccess = null, auditLog = null) {
   const current = await unlockVault(currentPassphrase);
-  return updateVaultCredentials(current.key, newPassphrase, entries, deviceAccess);
+  return updateVaultCredentials(current.key, newPassphrase, entries, deviceAccess, auditLog);
 }
 
-export async function saveVault(key, entries) {
+export async function saveVault(key, entries, auditLog = null) {
   const record = await getVaultRecord();
   if (!record) throw new Error("The encrypted vault no longer exists.");
-  await decryptEntriesForRecord(record, key);
-  const encrypted = await encryptVaultEntries(entries, key, undefined, record.version === 2 ? AAD_V2 : AAD_V1);
+  const currentPayload = await decryptPayloadForRecord(record, key);
+  const encrypted = await encryptVaultEntries(entries, key, undefined, record.version === 2 ? AAD_V2 : AAD_V1, auditLog ?? currentPayload.auditLog);
   await withStore("readwrite", (store) => store.put({ ...record, ...encrypted }));
 }

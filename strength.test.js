@@ -28,15 +28,15 @@ test("values between anchors use the greatest threshold they meet", () => {
   assert.equal(entropyClassification(12), "Very Weak");
 });
 
-test("mutual and one-way word options receive identical classifications", () => {
+test("mutual and one-way word options show identical entropy", () => {
   const expected = new Map([
-    [4, "4 words · OK"],
-    [5, "5 words · Good"],
-    [6, "6 words · Strong"],
-    [7, "7 words · Great"],
-    [8, "8 words · Excellent"],
-    [9, "9 words · Fantastic"],
-    [10, "10 words · Legendary"],
+    [4, "4 words · 44 bits"],
+    [5, "5 words · 55 bits"],
+    [6, "6 words · 66 bits"],
+    [7, "7 words · 77 bits"],
+    [8, "8 words · 88 bits"],
+    [9, "9 words · 99 bits"],
+    [10, "10 words · 110 bits"],
   ]);
   for (const [words, label] of expected) {
     assert.equal(entropyBits("words", words), words * 11);
@@ -44,9 +44,9 @@ test("mutual and one-way word options receive identical classifications", () => 
   }
 });
 
-test("numeric and Base32 options use the same threshold scale", () => {
-  assert.equal(strengthOptionLabel("numeric", 4), "4 characters · Very Weak");
-  assert.equal(strengthOptionLabel("numeric", 8), "8 characters · Poor");
-  assert.equal(strengthOptionLabel("base32", 8), "8 characters · Mediocre");
-  assert.equal(strengthOptionLabel("base32", 12), "12 characters · Good");
+test("numeric and Base32 options show their entropy in bits", () => {
+  assert.equal(strengthOptionLabel("numeric", 4), "4 characters · 13 bits");
+  assert.equal(strengthOptionLabel("numeric", 8), "8 characters · 26 bits");
+  assert.equal(strengthOptionLabel("base32", 8), "8 characters · 40 bits");
+  assert.equal(strengthOptionLabel("base32", 12), "12 characters · 60 bits");
 });
