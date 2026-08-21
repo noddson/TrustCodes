@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f5f1e8">
+  <meta name="description" content="Privacy policy for Trust Codes.">
+  <title>Privacy Policy — Trust Codes</title>
+  <link rel="icon" type="image/png" sizes="64x64" href="assets/trust-codes-favicon.png">
+  <style>
+    :root{color-scheme:light;--ink:#192d2a;--muted:#667570;--paper:#f5f1e8;--card:#fffdf8;--line:#d8ded8;--green:#194f47;--coral:#b95342;font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    *{box-sizing:border-box}
+    html,body{max-width:100%;overflow-x:clip}
+    body{margin:0;min-height:100vh;color:var(--ink);background:radial-gradient(circle at 10% 7%,rgba(225,159,102,.13),transparent 24rem),linear-gradient(180deg,#f8f4ec,#f3efe6)}
+    header{max-width:900px;margin:auto;padding:26px 28px 18px}
+    .brand{display:inline-flex;align-items:center;gap:11px;color:var(--ink);font-size:1.08rem;font-weight:780;letter-spacing:-.02em;text-decoration:none}
+    .brand img{width:38px;height:38px}
+    main{max-width:900px;margin:0 auto 52px;padding:26px 42px 46px;border:1px solid rgba(25,45,42,.11);border-radius:18px;background:var(--card);box-shadow:0 24px 70px rgba(32,50,45,.1)}
+    .eyebrow{margin:0 0 9px;color:var(--coral);font-size:.7rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
+    h1,h2{font-family:Georgia,"Times New Roman",serif;font-weight:500;letter-spacing:-.035em}
+    h1{margin:0 0 8px;font-size:clamp(2.4rem,7vw,4.2rem);line-height:1}
+    h2{margin:32px 0 9px;font-size:1.45rem}
+    p,li{color:#4f625d;font-size:.94rem;line-height:1.68}
+    .updated{margin:0 0 28px;color:var(--muted);font-size:.78rem;font-weight:650}
+    .summary{padding:17px 19px;border:1px solid #c7ddd5;border-radius:11px;background:#f1f8f5}
+    .summary p{margin:0}
+    ul{padding-left:22px}
+    li+li{margin-top:7px}
+    strong{color:#29443e}
+    a{color:var(--green);font-weight:700;text-underline-offset:3px}
+    code{overflow-wrap:anywhere;color:#294a43;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.86em}
+    .notice{margin-top:30px;padding:16px 18px;border:1px solid #dfcfaf;border-radius:10px;background:#fff9ed}
+    .notice p{margin:0;color:#66563f;font-size:.84rem}
+    @media(max-width:700px){header{padding:18px 16px 13px}main{margin:0 12px 30px;padding:24px 20px 34px;border-radius:14px}h2{margin-top:27px}p,li{font-size:.91rem}}
+  </style>
+</head>
+<body>
+  <header>
+    <a class="brand" href="./" aria-label="Trust Codes home">
+      <img src="assets/trust-codes-icon-transparent.png" width="192" height="192" alt="" aria-hidden="true">
+      <span>Trust Codes</span>
+    </a>
+  </header>
+
+  <main>
+    <p class="eyebrow">Privacy policy</p>
+    <h1>Your data stays under your control.</h1>
+    <p class="updated">Effective and last updated: August 20, 2026</p>
+
+    <div class="summary">
+      <p><strong>In short:</strong> Trust Codes has no application account, advertising system, analytics service, or developer-operated backend. Cryptographic operations run in your browser. Unless you deliberately share a setup code, follow an external link, or use a future optional cloud-backup feature, the information you enter stays on your device.</p>
+    </div>
+
+    <h2>1. Scope and operator</h2>
+    <p>This policy describes how the Trust Codes web application is operated by Nick Oddson (the “developer,” “Trust Codes,” “we,” “us,” or “our”). It applies to the application hosted at <code>https://noddson.github.io/trustcodes/</code>. Third-party websites, browser features, operating systems, passkey providers, and services linked from the application have their own privacy practices.</p>
+
+    <h2>2. Information processed on your device</h2>
+    <p>Depending on how you use Trust Codes, the application may process the following information locally in your browser:</p>
+    <ul>
+      <li>channel names and optional contact photos you select;</li>
+      <li>cryptographic secrets, hash-chain seeds or anchors, rotating codes, proof phrases, counters, setup codes, and related configuration;</li>
+      <li>an optional context secret entered while creating or using a channel;</li>
+      <li>your vault recovery password and temporary cryptographic keys while the vault is being created, unlocked, changed, or used;</li>
+      <li>camera frames used to scan a QR setup code; and</li>
+      <li>the non-sensitive preference indicating whether Simple mode is enabled.</li>
+    </ul>
+    <p>Camera frames are processed in page memory and are not intentionally saved or uploaded. Selected contact photos are resized locally. Context values, vault passwords, unwrapped keys, and decrypted channel material may exist temporarily in browser memory while needed for the requested operation, but Trust Codes does not intentionally persist them in plaintext.</p>
+
+    <h2>3. Local browser storage</h2>
+    <p>If you create and use the optional encrypted vault, saved channels, contact photos, counters, and proof state are encrypted with AES-256-GCM and stored in IndexedDB for the application’s browser origin. The persisted vault record also contains cryptographic metadata needed for decryption, such as version information, salts, initialization vectors, wrapped keys, and—if device unlock is configured—a passkey credential identifier and related non-secret parameters.</p>
+    <p>The Simple mode preference is stored separately in LocalStorage and is not encrypted because it contains no channel or identity information. Without an unlocked vault and an explicit save choice, channel information remains in page memory and is normally lost when the page is closed or reloaded.</p>
+    <p>You can remove the encrypted vault using the application’s two-step <strong>Purge vault</strong> control or by clearing site data in your browser. Clearing browser data, changing browsers, or changing devices may also remove it. A passkey may remain listed by your operating system or passkey provider after the local vault is purged, but it cannot unlock a vault record that no longer exists.</p>
+
+    <h2>4. Passkeys and device unlock</h2>
+    <p>On supported devices, Trust Codes can use WebAuthn and its PRF extension to wrap the vault key after your browser or operating system performs user verification. Trust Codes does not receive or store your fingerprint, face scan, device passcode, or other biometric template. Your operating system, browser, authenticator, and passkey provider control their own processing and any passkey synchronization.</p>
+
+    <h2>5. Information sent off your device</h2>
+    <p><strong>Application hosting.</strong> The application is delivered through GitHub Pages. When your browser requests the site, GitHub may process ordinary web-request information such as IP address, device or browser information, requested URLs, and timestamps under the <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement" rel="noopener noreferrer">GitHub Privacy Statement</a>. The developer may receive limited aggregate traffic information made available by GitHub.</p>
+    <p><strong>Information you deliberately share.</strong> A setup code or QR code is created locally. It leaves your device only when you choose to copy, display, transmit, or otherwise share it. The recipient and any communication service you use will process that information under their own practices.</p>
+    <p><strong>External links.</strong> Trust Codes links to GitHub commit pages, Wikipedia, and PayPal. Those services receive information only when you choose to follow their links, subject to their own privacy policies. An optional contribution is handled by PayPal; Trust Codes does not receive your payment credentials.</p>
+    <p>Trust Codes does not currently use application analytics, advertising trackers, marketing pixels, or developer-set cookies. It does not sell personal information or share it for cross-context behavioral advertising.</p>
+
+    <h2>6. Optional Google Drive backup</h2>
+    <p>The currently deployed application does not connect to Google Drive. If an optional Google Drive backup feature is made available and you choose to enable it, Trust Codes will request only the <code>drive.appdata</code> permission to create, read, update, or delete its own hidden application-data file. It will not request access to your ordinary Google Drive files.</p>
+    <p>The intended backup contains the encrypted vault record and associated cryptographic metadata, such as its format version, salts, initialization vectors, wrapped keys, and ciphertext. Trust Codes will not intentionally upload the vault password, context values, unwrapped vault key, decrypted channel contents, or plaintext contact photos. Google may process account, authorization, file metadata, network, and service-usage information under Google’s own policies.</p>
+    <p>Google Drive access will be optional and initiated by you. Trust Codes will use Google API information only to provide the visible encrypted-backup and restore functions you request. Trust Codes’ use and transfer of information received from Google APIs will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy" rel="noopener noreferrer">Google API Services User Data Policy</a>, including its Limited Use requirements. Google API information will not be sold, used for advertising, used to determine creditworthiness, or used to train a general-purpose artificial-intelligence model.</p>
+
+    <h2>7. Retention and deletion</h2>
+    <ul>
+      <li><strong>In-memory information</strong> normally remains until it is cleared, the vault is locked, the page is reloaded or closed, or the browser runtime releases it.</li>
+      <li><strong>Local encrypted-vault information</strong> remains until you purge the vault or clear the application’s browser storage.</li>
+      <li><strong>Local preferences</strong> remain until you change them or clear site storage.</li>
+      <li><strong>Future Google Drive backups</strong>, if enabled, will remain in your Google account until you delete the backup, remove the app’s data, or otherwise direct its deletion through available controls.</li>
+      <li><strong>Hosting and third-party records</strong> are retained by the relevant provider under its own policy.</li>
+    </ul>
+
+    <h2>8. Disclosure and service providers</h2>
+    <p>The developer does not intentionally receive your vault contents, channel secrets, contexts, contact photos, codes, proof phrases, or vault password. Information may be processed by GitHub as the hosting provider, by Google only if you later choose an optional Google Drive integration, by PayPal if you choose to contribute, or by another service you independently use to transmit a setup code. Information may also be disclosed if legally required, but the developer cannot disclose application data that the developer does not possess.</p>
+
+    <h2>9. Security and important limitations</h2>
+    <p>Trust Codes uses browser cryptography and encrypted local storage, but no system can guarantee absolute security. Encryption at rest does not protect an unlocked session. A compromised application update, webpage, browser extension, browser profile, operating system, device, authenticator, or cloud account could expose information. JavaScript cannot guarantee immediate erasure of values from memory because memory management is controlled by the browser runtime.</p>
+    <p>You are responsible for safeguarding setup codes, context secrets, vault passwords, devices, browser profiles, passkeys, backups, and any communication method used to transfer information.</p>
+
+    <h2>10. Your choices and privacy rights</h2>
+    <p>You can choose not to create a vault, not to save a channel, not to provide a contact photo or context, not to enable camera access or device unlock, and not to use any future cloud-backup option. Browser and operating-system settings let you revoke camera or passkey access and clear local storage. Where applicable law grants access, correction, deletion, restriction, objection, portability, or appeal rights, you may exercise them with the party that holds the relevant information. Most application content is held only under your control on your device.</p>
+
+    <h2>11. Children</h2>
+    <p>Trust Codes is not directed to children under 13, and the developer does not knowingly collect personal information from children through an application backend. A parent or guardian who believes a child has provided information directly to the developer may use the contact method below.</p>
+
+    <h2>12. International processing</h2>
+    <p>GitHub, Google, PayPal, passkey providers, and other services you choose may process information in countries other than your own. Their privacy policies describe their processing locations and transfer safeguards.</p>
+
+    <h2>13. Changes to this policy</h2>
+    <p>This policy may be updated when Trust Codes changes or when legal or service-provider requirements change. The effective date at the top will be revised. Material changes affecting Google API information will be disclosed before that information is used in a new way, and additional consent will be requested where required.</p>
+
+    <h2>14. Contact</h2>
+    <p>Privacy questions may be directed to Nick Oddson through the <a href="https://github.com/noddson/trustcodes" rel="noopener noreferrer">Trust Codes GitHub repository</a>. Do not include vault passwords, context secrets, setup codes, contact photos, or other sensitive information in a public GitHub issue.</p>
+
+    <div class="notice">
+      <p>This policy describes the application’s intended data practices. It does not change the security limitation that a matching Trust Code cannot guarantee another person’s identity, authority, honesty, intent, or the safety of a request.</p>
+    </div>
+  </main>
+</body>
+</html>
