@@ -62,7 +62,7 @@ Keep the one-time setup code somewhere safe. Browser data can be cleared, and th
 
 ## Google Drive encrypted backup
 
-The vault gear contains manual **Back up now** and **Restore** controls using Google Drive's hidden `appDataFolder`. TrustCodes requests only the `https://www.googleapis.com/auth/drive.appdata` scope. The uploaded JSON envelope contains the already-encrypted vault record and cryptographic metadata; it does not contain the recovery passphrase, an unwrapped vault key, plaintext channel contents, context values, or plaintext contact photos.
+The vault gear contains manual **Back up now** and **Restore** controls using Google Drive's hidden `appDataFolder`. TrustCodes requests only the `https://www.googleapis.com/auth/drive.appdata` scope. The uploaded JSON envelope contains the already-encrypted vault record, an explicit `lastBackedUpAt` timestamp, and cryptographic metadata; it does not contain the recovery passphrase, an unwrapped vault key, plaintext channel contents, context values, or plaintext contact photos.
 
 To enable the controls for a deployment:
 

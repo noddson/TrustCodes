@@ -730,10 +730,10 @@ el.driveRestoreOpen.addEventListener("click", async () => {
   setDriveBusy(el.driveRestoreOpen, true, "Checking…", "Restore…");
   try {
     pendingDriveRestore = await googleDriveBackup.restore(validateVaultBackupRecord);
-    const created = new Date(pendingDriveRestore.envelope.createdAt).toLocaleString();
+    const backedUp = new Date(pendingDriveRestore.envelope.lastBackedUpAt).toLocaleString();
     el.driveRestoreCopy.textContent = vaultPresent
-      ? `This backup was created ${created}. It will replace the encrypted vault currently saved in this browser.`
-      : `This backup was created ${created}. It will become the encrypted vault in this browser.`;
+      ? `This vault was last backed up ${backedUp}. It will replace the encrypted vault currently saved in this browser.`
+      : `This vault was last backed up ${backedUp}. It will become the encrypted vault in this browser.`;
     el.vaultOptionsDialog.close();
     el.driveRestoreDialog.showModal();
     el.driveRestoreConfirmation.focus();

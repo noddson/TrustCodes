@@ -14,23 +14,24 @@ export function createVaultBackupEnvelope(vault, now = new Date()) {
   return {
     format: DRIVE_BACKUP_FORMAT,
     version: 1,
-    createdAt: now.toISOString(),
+    lastBackedUpAt: now.toISOString(),
     sourceOrigin: globalThis.location?.origin || "unknown",
     vault,
   };
 }
 
 export function parseVaultBackupEnvelope(value, validateVault) {
+  const lastBackedUpAt = value?.lastBackedUpAt ?? value?.createdAt;
   if (!value || typeof value !== "object" || Array.isArray(value)
     || value.format !== DRIVE_BACKUP_FORMAT || value.version !== 1
-    || typeof value.createdAt !== "string" || !Number.isFinite(Date.parse(value.createdAt))
+    || typeof lastBackedUpAt !== "string" || !Number.isFinite(Date.parse(lastBackedUpAt))
     || typeof value.sourceOrigin !== "string" || value.sourceOrigin.length > 2048) {
     throw new Error("The Google Drive file is not a supported TrustCodes backup.");
   }
   return {
     format: DRIVE_BACKUP_FORMAT,
     version: 1,
-    createdAt: new Date(value.createdAt).toISOString(),
+    lastBackedUpAt: new Date(lastBackedUpAt).toISOString(),
     sourceOrigin: value.sourceOrigin,
     vault: validateVault(value.vault),
   };
@@ -65,9 +66,10 @@ async function responseError(response) {
 }
 
 export class GoogleDriveVaultBackup {
-  constructor({ clientId, fetchImpl = globalThis.fetch, loadIdentity = loadGoogleIdentityServices } = {}) {
+  constructor({ clientId, fetchImpl, loadIdentity = loadGoogleIdentityServices } = {}) {
     this.clientId = clientId?.trim() || "";
-    this.fetchImpl = fetchImpl;
+    // Calling a detached Window.fetch throws "Illegal invocation" in some browsers.
+    this.fetchImpl = fetchImpl || ((...args) => globalThis.fetch(...args));
     this.loadIdentity = loadIdentity;
     this.accessToken = null;
     this.expiresAt = 0;

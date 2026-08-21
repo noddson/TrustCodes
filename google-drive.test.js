@@ -30,12 +30,24 @@ test("backup envelopes are timestamped and require vault validation", () => {
   const vault = { id: "primary", ciphertext: "encrypted" };
   const envelope = createVaultBackupEnvelope(vault, new Date("2026-08-20T12:00:00Z"));
   assert.equal(envelope.format, DRIVE_BACKUP_FORMAT);
-  assert.equal(envelope.createdAt, "2026-08-20T12:00:00.000Z");
+  assert.equal(envelope.lastBackedUpAt, "2026-08-20T12:00:00.000Z");
   let validated = false;
   const parsed = parseVaultBackupEnvelope(envelope, (candidate) => { validated = true; return { ...candidate, checked: true }; });
   assert.equal(validated, true);
   assert.equal(parsed.vault.checked, true);
   assert.throws(() => parseVaultBackupEnvelope({ ...envelope, version: 2 }, () => vault), /not a supported/i);
+});
+
+test("restore accepts the earlier createdAt timestamp field", () => {
+  const legacyEnvelope = {
+    format: DRIVE_BACKUP_FORMAT,
+    version: 1,
+    createdAt: "2026-08-19T12:00:00Z",
+    sourceOrigin: "https://noddson.github.io",
+    vault: { id: "primary" },
+  };
+  const parsed = parseVaultBackupEnvelope(legacyEnvelope, (vault) => vault);
+  assert.equal(parsed.lastBackedUpAt, "2026-08-19T12:00:00.000Z");
 });
 
 test("a first backup creates one hidden appData file containing the encrypted envelope", async () => {
@@ -107,4 +119,21 @@ test("authorization is kept only in memory and can be revoked", async () => {
   drive.disconnect();
   assert.equal(revoked, "fresh-token");
   assert.equal(drive.connected, false);
+});
+
+test("the default browser fetch keeps its required global receiver", async () => {
+  const previousFetch = globalThis.fetch;
+  let called = false;
+  globalThis.fetch = function fetchWithRequiredReceiver() {
+    assert.equal(this, globalThis);
+    called = true;
+    return Promise.resolve(new Response("{}", { status: 200 }));
+  };
+  try {
+    const drive = connectedDrive(undefined);
+    await drive.authorizedFetch("https://www.googleapis.com/drive/v3/files");
+    assert.equal(called, true);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
 });
