@@ -137,3 +137,15 @@ test("the default browser fetch keeps its required global receiver", async () =>
     globalThis.fetch = previousFetch;
   }
 });
+
+test("an injected receiver-sensitive fetch is bound before Drive requests", async () => {
+  let called = false;
+  function receiverSensitiveFetch() {
+    assert.equal(this, globalThis);
+    called = true;
+    return Promise.resolve(new Response("{}", { status: 200 }));
+  }
+  const drive = connectedDrive(receiverSensitiveFetch);
+  await drive.authorizedFetch("https://www.googleapis.com/drive/v3/files");
+  assert.equal(called, true);
+});

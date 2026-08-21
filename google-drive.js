@@ -68,8 +68,8 @@ async function responseError(response) {
 export class GoogleDriveVaultBackup {
   constructor({ clientId, fetchImpl, loadIdentity = loadGoogleIdentityServices } = {}) {
     this.clientId = clientId?.trim() || "";
-    // Calling a detached Window.fetch throws "Illegal invocation" in some browsers.
-    this.fetchImpl = fetchImpl || ((...args) => globalThis.fetch(...args));
+    // Window.fetch requires its Window receiver in affected browsers.
+    this.fetchImpl = (fetchImpl || globalThis.fetch).bind(globalThis);
     this.loadIdentity = loadIdentity;
     this.accessToken = null;
     this.expiresAt = 0;
