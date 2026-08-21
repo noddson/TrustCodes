@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { entropyBits, entropyClassification, entropyTone, strengthOptionLabel } from "./strength.js";
+import { entropyBits, entropyClassification, strengthOptionLabel } from "./strength.js";
 
 test("entropy anchors use the shared classification table", () => {
   const levels = [
@@ -28,15 +28,6 @@ test("values between anchors use the greatest threshold they meet", () => {
   assert.equal(entropyClassification(12), "Very Weak");
 });
 
-test("every entropy classification has a distinct visual tone", () => {
-  const expected = [
-    [13, "very-weak"], [19, "weak"], [26, "poor"], [33, "mediocre"],
-    [44, "ok"], [55, "good"], [66, "strong"], [77, "great"],
-    [88, "excellent"], [99, "fantastic"], [110, "legendary"],
-  ];
-  for (const [bits, tone] of expected) assert.equal(entropyTone(bits), tone);
-});
-
 test("mutual and one-way word options show identical entropy", () => {
   const expected = new Map([
     [4, "4 words · 44 bits"],
@@ -46,7 +37,6 @@ test("mutual and one-way word options show identical entropy", () => {
     [8, "8 words · 88 bits"],
     [9, "9 words · 99 bits"],
     [10, "10 words · 110 bits"],
-    [12, "12 words · 132 bits"],
   ]);
   for (const [words, label] of expected) {
     assert.equal(entropyBits("words", words), words * 11);
@@ -59,5 +49,4 @@ test("numeric and Base32 options show their entropy in bits", () => {
   assert.equal(strengthOptionLabel("numeric", 8), "8 characters · 26 bits");
   assert.equal(strengthOptionLabel("base32", 8), "8 characters · 40 bits");
   assert.equal(strengthOptionLabel("base32", 12), "12 characters · 60 bits");
-  assert.equal(strengthOptionLabel("base32", 14), "14 characters · 70 bits");
 });

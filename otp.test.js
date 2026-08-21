@@ -78,18 +78,6 @@ test("custom formats are deterministic at their configured strength", async () =
   assert.equal(formatDigest(digest, "words", 8).split(" ").length, 8);
 });
 
-test("15- and 16-word mutual codes use the domain-separated digest extension", async () => {
-  const base = { scheme: "mutual", method: "hotp", secret: SECRET, counter: 3, format: "words", context: "" };
-  const fourteen = await generateMutualCode({ ...base, length: 14 });
-  const fifteen = await generateMutualCode({ ...base, length: 15 });
-  const sixteen = await generateMutualCode({ ...base, length: 16 });
-  assert.equal(fourteen.split(" ").length, 14);
-  assert.equal(fifteen.split(" ").length, 15);
-  assert.equal(sixteen.split(" ").length, 16);
-  assert.equal(fifteen.split(" ").slice(0, 14).join(" "), fourteen);
-  assert.equal(sixteen.split(" ").slice(0, 15).join(" "), fifteen);
-});
-
 test("optional context personalizes mutual codes", async () => {
   const base = { scheme: "mutual", method: "hotp", secret: SECRET, counter: 2, format: "numeric", length: 8 };
   const noContext = await generateMutualCode({ ...base, context: "" });
@@ -132,19 +120,6 @@ test("setup codes omit context while manually matching contexts still interopera
     await generateMutualCode(imported, time, undefined, ""),
     "two devices omitting a configured context must not agree by accident",
   );
-});
-
-test("mutual-code slider strengths survive authenticated setup export and import", async () => {
-  for (const [format, length] of [["numeric", 4], ["numeric", 16], ["base32", 14], ["words", 10], ["words", 12], ["words", 16]]) {
-    const { peer } = await createChannelPair({ name: "Extended strength", context: "", scheme: "mutual", method: "totp", format, length });
-    const passphrase = generateSetupPassphrase();
-    const imported = await decodeProtectedSetupCode(await encodeProtectedSetupCode(peer, passphrase), passphrase);
-    assert.equal(imported.format, format);
-    assert.equal(imported.length, length);
-    assert.equal((await generateMutualCode(imported)).split(format === "words" ? " " : "").length, length);
-  }
-  await assert.rejects(createChannelPair({ scheme: "mutual", method: "totp", format: "words", length: 3 }), /4 to 16/i);
-  await assert.rejects(createChannelPair({ scheme: "mutual", method: "totp", format: "words", length: 17 }), /4 to 16/i);
 });
 
 test("authenticated setup codes require the generated passphrase and expose a comparable fingerprint", async () => {

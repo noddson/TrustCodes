@@ -9,14 +9,11 @@ import {
   generateMutualCode,
   generateProofPhrase,
   isProtectedSetupCode,
-  MUTUAL_LENGTH_MAX,
-  MUTUAL_LENGTH_MIN,
   normalizeCode,
   permutationCount,
   setupFingerprint,
   validateProtectedSetupCode,
   verifyProofPhrase,
-  WORDS,
 } from "./otp.js";
 import { drawQrCode } from "./qr.js";
 import { cameraErrorMessage, normalizeScannedSetupCode, QrCameraScanner } from "./qr-scanner.js";
@@ -28,21 +25,20 @@ import { GOOGLE_DRIVE_CLIENT_ID } from "./google-drive-config.js";
 import { createVaultBackupEnvelope, GoogleDriveVaultBackup } from "./google-drive.js";
 import { loadBuildVersion } from "./build-version.js";
 import { initialsForName, photoDataUrl, readSimpleModePreference, writeSimpleModePreference } from "./simple-mode.js";
-import { entropyBits, entropyClassification, entropyTone, strengthOptionLabel } from "./strength.js";
+import { entropyBits, entropyClassification, strengthOptionLabel } from "./strength.js";
 import { appendAuditLog, AUDIT_ACTION_LABELS, AUDIT_ACTIONS, auditLogViewingEnabled, clearPendingAuditLog, clearVaultUnlockFailures, mergeAuditLogs, noteVaultUnlockFailure, readPendingAuditLog, writePendingAuditLog } from "./audit-log.js";
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
+const LENGTHS = { numeric: [4, 6, 8, 10, 12, 16], base32: [4, 6, 8, 10, 12, 16], words: [4, 5, 6, 7, 8] };
 const PROOF_LENGTHS = [5, 6, 7, 8, 9, 10];
-const FORMAT_HELP = { numeric: "Familiar and easy to read aloud.", base32: "Uses 0–9 and uppercase letters except I, L, O, and U. Typed O maps to 0; I or L maps to 1.", words: "Uses the complete 2,048-word BIP-39 dictionary." };
+const FORMAT_HELP = { numeric: "Familiar and easy to read aloud.", base32: "Crockford Base32 uses 0–9 and uppercase letters except I, L, O, and U. Typed O maps to 0; I or L maps to 1.", words: "Uses the complete 2,048-word BIP-39 dictionary." };
 const ESTIMATE_RATE = 20_000_000_000;
-const EXAMPLE_NUMERIC = "4829173051648297";
-const EXAMPLE_BASE32 = "7K9M2QX4T6W8R3YP";
 
 const el = {
   setupStart: $("#setup-start"), importView: $("#import-view"), shareView: $("#share-view"),
   name: $("#channel-name"), context: $("#channel-context"), format: $("#code-format"), length: $("#code-length"),
-  formatHelp: $("#format-help"), formatExample: $("#format-example"), lengthLabel: $("#code-length-label"), strengthRating: $("#strength-rating"), mutualSettings: $("#mutual-settings"), proofSettings: $("#proof-settings"),
+  formatHelp: $("#format-help"), strengthRating: $("#strength-rating"), mutualSettings: $("#mutual-settings"), proofSettings: $("#proof-settings"),
   proofTotal: $("#proof-total"), proofWords: $("#proof-words"), proofStrengthDetails: $("#proof-strength-details"), showImport: $("#show-import"), importCode: $("#import-code"), importSetupPassphrase: $("#import-setup-passphrase"), setupCode: $("#setup-code"),
   shareInstruction: $("#share-instruction"), setupPassphrase: $("#setup-passphrase"), setupFingerprint: $("#setup-fingerprint"), setupQrPanel: $("#setup-qr-panel"), setupQr: $("#setup-qr"), showSetupQr: $("#show-setup-qr"),
   startScanner: $("#start-scanner"), stopScanner: $("#stop-scanner"), scannerView: $("#scanner-view"), scannerVideo: $("#scanner-video"), scannerCanvas: $("#scanner-canvas"), scannerStatus: $("#scanner-status"),
@@ -260,7 +256,7 @@ function strengthRatingMarkup(format, length, proof = false) {
     : "This does not estimate recovery of the shared secret: a displayed mutual code does not provide an offline correctness test or determine whether the request is safe. Actual attacks vary.";
   const details = `${permutations.toLocaleString("en-US")} possible ${noun}. At 20 billion trials/second: ${formatDuration(exhaustiveSeconds / 2)} on average, or ${formatDuration(exhaustiveSeconds)} to exhaust every possibility. ${relevance}`;
   const label = entropyClassification(bits);
-  return `<details class="strength-disclosure strength-${entropyTone(bits)}"><summary><strong>${label}</strong><span class="rating-bits">~${bits} bits raw guess space</span></summary><p>${details} Learn more here: <a href="https://en.wikipedia.org/wiki/Phishing" target="_blank" rel="noopener noreferrer">Phishing</a>.</p></details>`;
+  return `<details class="strength-disclosure"><summary><strong>${label}</strong><span class="rating-bits">~${bits} bits raw guess space</span></summary><p>${details} Learn more here: <a href="https://en.wikipedia.org/wiki/Phishing" target="_blank" rel="noopener noreferrer">Phishing</a>.</p></details>`;
 }
 
 function updateProofStrengthDetails() {
@@ -276,29 +272,15 @@ function updateProofStrengthOptions() {
   updateProofStrengthDetails();
 }
 
-function exampleCode(format, length) {
-  if (format === "words") return Array.from({ length }, (_, index) => WORDS[(42 + index * 127) % WORDS.length]).join(" ");
-  return formatForDisplay((format === "numeric" ? EXAMPLE_NUMERIC : EXAMPLE_BASE32).slice(0, length), format);
-}
-
-function updateMutualStrength() {
-  const format = el.format.value;
-  const length = Number(el.length.value);
-  const unit = format === "words" ? (length === 1 ? "word" : "words") : (length === 1 ? "character" : "characters");
-  el.lengthLabel.textContent = `${length} ${unit}`;
-  el.formatExample.textContent = exampleCode(format, length);
-  el.strengthRating.innerHTML = strengthRatingMarkup(format, length, false);
-}
-
 function updateStrengthOptions() {
-  const previous = Number(el.length.value);
-  el.length.min = String(MUTUAL_LENGTH_MIN);
-  el.length.max = String(MUTUAL_LENGTH_MAX);
-  el.length.step = "1";
-  el.length.value = String(Number.isSafeInteger(previous) && previous >= MUTUAL_LENGTH_MIN && previous <= MUTUAL_LENGTH_MAX ? previous : 6);
-  const format = el.format.value;
+  const format = el.format.value, previous = Number(el.length.value);
+  el.length.innerHTML = LENGTHS[format].map((length) => {
+    return `<option value="${length}">${strengthOptionLabel(format, length)}</option>`;
+  }).join("");
+  el.length.value = String(LENGTHS[format].includes(previous) ? previous : 6);
   el.formatHelp.textContent = FORMAT_HELP[format];
-  updateMutualStrength();
+  const length = Number(el.length.value);
+  el.strengthRating.innerHTML = strengthRatingMarkup(format, length, false);
 }
 
 function updateScheme() {
@@ -914,7 +896,7 @@ $$('[data-tab]').forEach((button) => button.addEventListener("click", () => swit
 $$('[data-go-setup]').forEach((button) => button.addEventListener("click", () => { resetSetupViews(); switchTab("setup"); }));
 $$('input[name="scheme"]').forEach((radio) => radio.addEventListener("change", updateScheme));
 el.format.addEventListener("change", updateStrengthOptions);
-el.length.addEventListener("input", updateMutualStrength);
+el.length.addEventListener("change", updateStrengthOptions);
 el.proofWords.addEventListener("change", updateProofStrengthDetails);
 el.simpleEnter.addEventListener("click", () => {
   if (!active()) return showToast("Create or unlock a trust channel first");
