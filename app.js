@@ -882,19 +882,15 @@ async function renderBuildVersion() {
   const version = await loadBuildVersion(window.location.href);
   if (!version) return;
 
-  versionElement.textContent = `Version: ${version.displayVersion}`;
-  versionElement.title = version.fullSha;
-
-  const sourceElement = $("#app-version-source");
-  if (!sourceElement) return;
+  const label = document.createTextNode("Version: ");
   const link = document.createElement("a");
   link.href = version.githubCommitUrl;
-  link.textContent = "View this version on GitHub";
+  link.textContent = version.displayVersion;
   link.target = "_blank";
   link.rel = "noopener noreferrer";
   link.title = version.fullSha;
-  sourceElement.replaceChildren(link);
-  sourceElement.hidden = false;
+  link.addEventListener("click", (event) => event.stopPropagation());
+  versionElement.replaceChildren(label, link);
 }
 
 function initializeResponsiveFooter() {
@@ -904,7 +900,8 @@ function initializeResponsiveFooter() {
   const sync = () => { footer.open = !compact.matches; };
   sync();
   footer.querySelector("summary")?.addEventListener("click", (event) => {
-    if (!compact.matches) event.preventDefault();
+    event.preventDefault();
+    if (compact.matches) footer.open = !footer.open;
   });
   if (typeof compact.addEventListener === "function") compact.addEventListener("change", sync);
   else compact.addListener?.(sync);
