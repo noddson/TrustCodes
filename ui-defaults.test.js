@@ -12,8 +12,12 @@ test("new mutual channels default to time-based six-word codes", () => {
 test("the version footer uses a mobile-responsive disclosure", () => {
   const html = readFileSync("index.html", "utf8");
   const app = readFileSync("app.js", "utf8");
-  assert.match(html, /<details id="app-footer-disclosure" class="app-footer-disclosure" open>/);
+  assert.match(html, /<details id="app-footer-disclosure" class="app-footer-disclosure">/);
+  assert.doesNotMatch(html, /class="app-footer-disclosure" open/);
   assert.match(html, /<summary class="app-footer-summary"><span id="app-version"/);
-  assert.match(app, /matchMedia\("\(max-width: 760px\)"\)/);
-  assert.match(app, /footer\.open = !mobile\.matches/);
+  assert.match(html, /<p id="app-version-source" class="app-version-source" hidden><\/p>/);
+  assert.match(app, /matchMedia\("\(max-width: 900px\)"\)/);
+  assert.match(app, /footer\.open = !compact\.matches/);
+  assert.match(app, /versionElement\.textContent = `Version: \$\{version\.displayVersion\}`/);
+  assert.match(app, /sourceElement\.replaceChildren\(link\)/);
 });

@@ -882,27 +882,32 @@ async function renderBuildVersion() {
   const version = await loadBuildVersion(window.location.href);
   if (!version) return;
 
-  const label = document.createTextNode("Version: ");
+  versionElement.textContent = `Version: ${version.displayVersion}`;
+  versionElement.title = version.fullSha;
+
+  const sourceElement = $("#app-version-source");
+  if (!sourceElement) return;
   const link = document.createElement("a");
   link.href = version.githubCommitUrl;
-  link.textContent = version.displayVersion;
+  link.textContent = "View this version on GitHub";
   link.target = "_blank";
   link.rel = "noopener noreferrer";
   link.title = version.fullSha;
-  versionElement.replaceChildren(label, link);
+  sourceElement.replaceChildren(link);
+  sourceElement.hidden = false;
 }
 
 function initializeResponsiveFooter() {
   const footer = $("#app-footer-disclosure");
   if (!footer) return;
-  const mobile = window.matchMedia("(max-width: 760px)");
-  const sync = () => { footer.open = !mobile.matches; };
+  const compact = window.matchMedia("(max-width: 900px)");
+  const sync = () => { footer.open = !compact.matches; };
   sync();
   footer.querySelector("summary")?.addEventListener("click", (event) => {
-    if (!mobile.matches && !event.target.closest?.("a")) event.preventDefault();
+    if (!compact.matches) event.preventDefault();
   });
-  if (typeof mobile.addEventListener === "function") mobile.addEventListener("change", sync);
-  else mobile.addListener?.(sync);
+  if (typeof compact.addEventListener === "function") compact.addEventListener("change", sync);
+  else compact.addListener?.(sync);
 }
 
 async function applySelectedPhoto(input) {
