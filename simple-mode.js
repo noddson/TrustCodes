@@ -1,12 +1,16 @@
-export const SIMPLE_MODE_STORAGE_KEY = "trust-codes-simple-mode";
+export const SIMPLE_MODE_STORAGE_KEY = "circle-signal-simple-mode";
 
 export function readSimpleModePreference(storage = globalThis.localStorage) {
-  try { return storage?.getItem(SIMPLE_MODE_STORAGE_KEY) === "true"; }
+  try {
+    return storage?.getItem(SIMPLE_MODE_STORAGE_KEY) === "true";
+  }
   catch { return false; }
 }
 
 export function writeSimpleModePreference(enabled, storage = globalThis.localStorage) {
-  try { storage?.setItem(SIMPLE_MODE_STORAGE_KEY, String(Boolean(enabled))); }
+  try {
+    storage?.setItem(SIMPLE_MODE_STORAGE_KEY, String(Boolean(enabled)));
+  }
   catch { /* The mode still works for this page when browser storage is unavailable. */ }
 }
 

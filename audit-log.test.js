@@ -42,7 +42,7 @@ test("all security lifecycle actions are allowlisted", () => {
     "good_recovery_password_accepted",
     "google_drive_backup_completed",
     "google_drive_restore_completed",
-    "low_strength_trust_code_created",
+    "low_strength_circle_signal_created",
     "recovery_code_downloaded",
     "repeated_vault_unlock_failures",
     "vault_recovery_changed",

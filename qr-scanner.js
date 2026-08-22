@@ -5,7 +5,7 @@ let decoderPromise;
 
 export function normalizeScannedSetupCode(value) {
   const text = String(value || "").trim();
-  if (!text.startsWith("TC2-") || text.length > 20_000) return "";
+  if (!text.startsWith("CS2-") || text.length > 20_000) return "";
   return text;
 }
 
@@ -69,7 +69,7 @@ export class QrCameraScanner {
       this.detector = await nativeDetector();
       if (!this.detector) this.decoder = await localDecoder();
       this.active = true;
-      this.onStatus("Camera on · point it at a TrustCodes QR code");
+      this.onStatus("Camera on · point it at a CircleSignal QR code");
       this.frameRequest = requestAnimationFrame((time) => this.scan(time));
     } catch (error) {
       this.stop();

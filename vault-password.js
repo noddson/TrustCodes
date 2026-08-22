@@ -8,8 +8,8 @@ const COMMON_VALUES = new Set([
   "123456", "12345678", "123456789", "1234567890", "111111", "000000",
   "abc123", "qwerty", "qwerty123", "password", "password1", "password123",
   "letmein", "welcome", "welcome1", "admin", "administrator", "changeme",
-  "iloveyou", "monkey", "dragon", "football", "baseball", "trustcodes",
-  "trustcodes1", "trustcodes123", "recovery", "recoverypassword",
+  "iloveyou", "monkey", "dragon", "football", "baseball", "circlesignal",
+  "circlesignal1", "circlesignal123", "recovery", "recoverypassword",
   "weakrecoverypassword", "correcthorsebatterystaple", "princess", "sunshine",
   "master", "shadow", "superman", "michael", "jennifer", "charlie", "donald",
   "freedom", "whatever", "secret", "login", "starwars", "computer", "internet",
@@ -17,7 +17,7 @@ const COMMON_VALUES = new Set([
   "pssword", "pssw0rd", "qazwsx", "1q2w3e4r", "1qaz2wsx", "zaq12wsx",
 ]);
 
-const GENERATED_CODE_PATTERN = /^TCVR-(?:[0-9A-HJKMNP-TV-Z]{4}-){7}[0-9A-HJKMNP-TV-Z]{4}$/;
+const GENERATED_CODE_PATTERN = /^CSVR-(?:[0-9A-HJKMNP-TV-Z]{4}-){7}[0-9A-HJKMNP-TV-Z]{4}$/;
 
 function characterLength(value) { return [...value].length; }
 
@@ -46,8 +46,8 @@ function predictablePasswordProblem(value) {
   const compact = compactForComparison(value);
   const leetspeak = normalizeLeetspeak(compact);
   if (COMMON_VALUES.has(compact) || COMMON_VALUES.has(leetspeak)) return "Choose a less common recovery password. This value is easy to guess.";
-  if (/^(password|passphrase|trustcodes?|welcome|letmein|changeme|admin(?:istrator)?|recovery(?:password)?|summer|winter|spring|autumn|fall)(?:20\d{2}|\d{0,6})*$/.test(compact)
-    || /^(password|passphrase|trustcodes?|welcome|letmein|changeme|admin(?:istrator)?|recovery(?:password)?)[a-z0-9]{0,12}$/.test(leetspeak)) {
+  if (/^(password|passphrase|circlesignal?|welcome|letmein|changeme|admin(?:istrator)?|recovery(?:password)?|summer|winter|spring|autumn|fall)(?:20\d{2}|\d{0,6})*$/.test(compact)
+    || /^(password|passphrase|circlesignal?|welcome|letmein|changeme|admin(?:istrator)?|recovery(?:password)?)[a-z0-9]{0,12}$/.test(leetspeak)) {
     return "Choose a less predictable recovery password. Names, common words, and number suffixes are easy to guess.";
   }
   if (/^(.)\1{7,}$/u.test(value) || /^(.{1,4})\1{3,}$/u.test(value) || hasRepeatedWordPattern(value, compact)) {
@@ -67,7 +67,7 @@ export function generateVaultRecoveryCode(randomBytes = null) {
   const bytes = randomBytes ? new Uint8Array(randomBytes) : crypto.getRandomValues(new Uint8Array(GENERATED_RECOVERY_CODE_BYTES));
   if (bytes.byteLength !== GENERATED_RECOVERY_CODE_BYTES) throw new Error(`Recovery-code generation requires ${GENERATED_RECOVERY_CODE_BYTES} random bytes.`);
   const encoded = encodeCrockfordBase32(bytes);
-  return `TCVR-${encoded.match(/.{4}/g).join("-")}`;
+  return `CSVR-${encoded.match(/.{4}/g).join("-")}`;
 }
 
 export function assessVaultPassword(password) {

@@ -64,7 +64,7 @@ test("a first backup creates one hidden appData file containing the encrypted en
   assert.match(requests[1].url, /uploadType=multipart/);
   assert.equal(requests[1].options.method, "POST");
   assert.match(requests[1].options.body, /"parents":\["appDataFolder"\]/);
-  assert.match(requests[1].options.body, /"format":"trustcodes-encrypted-vault-backup"/);
+  assert.match(requests[1].options.body, /"format":"circlesignal-encrypted-vault-backup"/);
 });
 
 test("an existing single backup is updated, while duplicates stop writes", async () => {

@@ -8,7 +8,8 @@ const DEFAULT_PROOF_WORDS = 6;
 const PROOF_WORD_LENGTHS = [5, 6, 7, 8, 9, 10];
 const CONTEXT_ITERATIONS = 600_000;
 const encoder = new TextEncoder();
-const SETUP_AAD = encoder.encode("TrustCodes/AuthenticatedSetup/v1");
+const SETUP_AAD = encoder.encode("CircleSignal/AuthenticatedSetup/v1");
+const SETUP_CODE_PREFIX = "CS2-";
 export const SETUP_KDF_ITERATIONS = 600_000;
 export const SETUP_PASSPHRASE_WORDS = 8;
 export const SETUP_FINGERPRINT_HEX_DIGITS = 12;
@@ -112,7 +113,7 @@ async function contextKey(entry, context) {
   if (cached?.context === normalized) return cached.promise;
   const promise = (async () => {
     const material = await crypto.subtle.importKey("raw", encoder.encode(normalized), "PBKDF2", false, ["deriveBits"]);
-    const salt = concatBytes(encoder.encode("TrustCodes/ContextWrap/v1\0"), decodeBase64Url(entry.contextSalt));
+    const salt = concatBytes(encoder.encode("CircleSignal/ContextWrap/v1\0"), decodeBase64Url(entry.contextSalt));
     return new Uint8Array(await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations: CONTEXT_ITERATIONS }, material, 256));
   })();
   contextKeyCaches.set(entry, { context: normalized, promise });
@@ -123,7 +124,7 @@ async function contextMaterialMask(entry, context, label, length, words) {
   const keyBytes = await contextKey(entry, context);
   if (!keyBytes) return new Uint8Array(length);
   const key = await crypto.subtle.importKey("raw", keyBytes, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const digest = new Uint8Array(await crypto.subtle.sign("HMAC", key, encoder.encode(`TrustCodes/ContextMaterial/v1\0${label}`)));
+  const digest = new Uint8Array(await crypto.subtle.sign("HMAC", key, encoder.encode(`CircleSignal/ContextMaterial/v1\0${label}`)));
   return words ? canonicalProofBytes(digest, words) : digest.slice(0, length);
 }
 
@@ -136,7 +137,7 @@ function movingFactorMessage(counter, context, method) {
   const movingFactor = counterBytes(counter);
   const normalized = normalizedContext(context);
   if (!normalized) return movingFactor;
-  const prefix = encoder.encode(`TrustCodes/Mutual/v1\0${method}\0${normalized}\0`);
+  const prefix = encoder.encode(`CircleSignal/Mutual/v1\0${method}\0${normalized}\0`);
   return concatBytes(prefix, movingFactor);
 }
 
@@ -188,7 +189,7 @@ export function wordsToBytes(phrase, expectedLength) {
   let value = 0n;
   for (const word of parts) {
     const index = WORDS.indexOf(word);
-    if (index < 0) throw new Error(`“${word}” is not in the TrustCodes dictionary.`);
+    if (index < 0) throw new Error(`“${word}” is not in the CircleSignal dictionary.`);
     value = (value << 11n) | BigInt(index);
   }
   const bytes = new Uint8Array(proofByteLength(length));
@@ -264,7 +265,7 @@ export async function verifyMutualCode(input, entry, time = Date.now(), context 
 }
 
 export async function hashChainStep(value, context = "", words = DEFAULT_PROOF_WORDS) {
-  const prefix = encoder.encode(`TrustCodes/Proof/v1\0${normalizedContext(context)}\0`);
+  const prefix = encoder.encode(`CircleSignal/Proof/v1\0${normalizedContext(context)}\0`);
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", concatBytes(prefix, value)));
   return canonicalProofBytes(digest, words);
 }
@@ -284,7 +285,7 @@ async function proofContextMask(context, anchor, words) {
   const normalized = normalizedContext(context);
   if (!normalized) return new Uint8Array(proofByteLength(words));
   const key = await crypto.subtle.importKey("raw", encoder.encode(normalized), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const message = concatBytes(encoder.encode("TrustCodes/ProofContext/v1\0"), anchor);
+  const message = concatBytes(encoder.encode("CircleSignal/ProofContext/v1\0"), anchor);
   const digest = new Uint8Array(await crypto.subtle.sign("HMAC", key, message));
   return canonicalProofBytes(digest, words);
 }
@@ -444,9 +445,9 @@ async function deriveSetupKey(passphrase, salt) {
 
 function protectedSetupEnvelope(input) {
   const value = String(input || "").trim();
-  if (!value.startsWith("TC2-")) throw new Error();
+  if (!value.startsWith(SETUP_CODE_PREFIX)) throw new Error();
   if (value.length > 20_000) throw new Error();
-  const envelope = JSON.parse(new TextDecoder().decode(decodeBase64Url(value.slice(4))));
+  const envelope = JSON.parse(new TextDecoder().decode(decodeBase64Url(value.slice(SETUP_CODE_PREFIX.length))));
   if (envelope?.v !== 1 || envelope.k !== "PBKDF2-HMAC-SHA256" || envelope.i !== SETUP_KDF_ITERATIONS) throw new Error();
   if (decodeBase64Url(envelope.s).length !== 16 || decodeBase64Url(envelope.n).length !== 12) throw new Error();
   const ciphertext = decodeBase64Url(envelope.c);
@@ -460,7 +461,7 @@ export function generateSetupPassphrase() {
 }
 
 export function isProtectedSetupCode(input) {
-  return String(input || "").trim().startsWith("TC2-");
+  return String(input || "").trim().startsWith(SETUP_CODE_PREFIX);
 }
 
 export function validateProtectedSetupCode(input) {
@@ -491,7 +492,7 @@ export async function encodeProtectedSetupCode(entry, passphrase) {
       n: encodeBase64Url(iv),
       c: encodeBase64Url(ciphertext),
     };
-    return `TC2-${encodeBase64Url(encoder.encode(JSON.stringify(envelope)))}`;
+    return `${SETUP_CODE_PREFIX}${encodeBase64Url(encoder.encode(JSON.stringify(envelope)))}`;
   } finally {
     plaintext.fill(0);
   }
@@ -518,7 +519,7 @@ export async function decodeProtectedSetupCode(input, passphrase) {
 
 export async function setupFingerprint(input) {
   const value = String(input || "").trim();
-  if (value.length > 20_000 || !value.startsWith("TC2-")) {
+  if (value.length > 20_000 || !isProtectedSetupCode(value)) {
     throw new Error("That setup code is damaged or unsupported.");
   }
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", encoder.encode(value)));

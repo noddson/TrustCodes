@@ -146,7 +146,7 @@ test("authenticated setup codes require the generated passphrase and expose a co
   const ciphertext = decodeBase64Url(envelope.c);
   ciphertext[0] ^= 1;
   envelope.c = encodeBase64Url(ciphertext);
-  const tampered = `TC2-${encodeBase64Url(new TextEncoder().encode(JSON.stringify(envelope)))}`;
+  const tampered = `CS2-${encodeBase64Url(new TextEncoder().encode(JSON.stringify(envelope)))}`;
   assert.equal(validateProtectedSetupCode(tampered), true, "structural validation alone cannot authenticate ciphertext");
   await assert.rejects(decodeProtectedSetupCode(tampered, passphrase), /incorrect|damaged/i);
 
@@ -160,8 +160,8 @@ test("blank setup context preserves normal mutual behavior", async () => {
   assert.equal(await generateMutualCode(local), await generateMutualCode(peer));
 });
 
-test("unauthenticated TC1 setup codes are rejected", async () => {
-  const code = `TC1-${encodeBase64Url(new TextEncoder().encode("legacy"))}`;
+test("unauthenticated CS1 setup codes are rejected", async () => {
+  const code = `CS1-${encodeBase64Url(new TextEncoder().encode("legacy"))}`;
   assert.equal(isProtectedSetupCode(code), false);
   assert.equal(validateProtectedSetupCode(code), false);
   await assert.rejects(decodeProtectedSetupCode(code, generateSetupPassphrase()), /incorrect|damaged|unsupported/i);

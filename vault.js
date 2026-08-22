@@ -4,15 +4,15 @@ import { validateAuditLog } from "./audit-log.js";
 
 export { VAULT_PASSWORD_MAX_LENGTH, VAULT_PASSWORD_MIN_LENGTH } from "./vault-password.js";
 
-const DB_NAME = "trust-codes-vault";
+const DB_NAME = "circle-signal-vault";
 const STORE_NAME = "vault";
 const RECORD_ID = "primary";
 export const VAULT_ITERATIONS = 600_000;
-const AAD_V1 = new TextEncoder().encode("TrustCodesVault/v1");
-const AAD_V2 = new TextEncoder().encode("TrustCodesVault/v2");
-const PASSWORD_WRAP_AAD = new TextEncoder().encode("TrustCodesVault/password-wrap/v1");
-const DEVICE_WRAP_AAD = new TextEncoder().encode("TrustCodesVault/device-wrap/v1");
-const DEVICE_KDF_INFO = new TextEncoder().encode("TrustCodesVault/WebAuthn-PRF/v1");
+const AAD_V1 = new TextEncoder().encode("CircleSignalVault/v1");
+const AAD_V2 = new TextEncoder().encode("CircleSignalVault/v2");
+const PASSWORD_WRAP_AAD = new TextEncoder().encode("CircleSignalVault/password-wrap/v1");
+const DEVICE_WRAP_AAD = new TextEncoder().encode("CircleSignalVault/device-wrap/v1");
+const DEVICE_KDF_INFO = new TextEncoder().encode("CircleSignalVault/WebAuthn-PRF/v1");
 const MAX_VAULT_CIPHERTEXT_CHARACTERS = 24 * 1024 * 1024;
 
 export function vaultPassphraseProblem(passphrase) {
@@ -43,10 +43,10 @@ function checkedWrappedKey(value, label) {
   };
 }
 
-/** Validate and copy only the encrypted fields TrustCodes understands. */
+/** Validate and copy only the encrypted fields CircleSignal understands. */
 export function validateVaultBackupRecord(record) {
   if (!record || typeof record !== "object" || Array.isArray(record) || record.id !== RECORD_ID) {
-    throw new Error("The backup does not contain a TrustCodes encrypted vault.");
+    throw new Error("The backup does not contain a CircleSignal encrypted vault.");
   }
   const encrypted = {
     iv: checkedBase64Url(record.iv, "vault IV", 12),

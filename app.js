@@ -174,14 +174,14 @@ function scannerInstance() {
     onDetected: async (value) => {
       const setupCode = normalizeScannedSetupCode(value);
       if (!setupCode) {
-        el.scannerStatus.textContent = "A QR code was found, but it is not a TrustCodes setup code.";
+        el.scannerStatus.textContent = "A QR code was found, but it is not a CircleSignal setup code.";
         return false;
       }
       try {
         if (!validateProtectedSetupCode(setupCode)) throw new Error();
       }
       catch {
-        el.scannerStatus.textContent = "That TrustCodes QR code is damaged or unsupported.";
+        el.scannerStatus.textContent = "That CircleSignal QR code is damaged or unsupported.";
         return false;
       }
       el.importCode.value = setupCode;
@@ -435,7 +435,7 @@ function renderSimplePeople(entry) {
 function renderSimpleWorkspace(entry = active()) {
   const available = Boolean(entry);
   el.simpleEnter.disabled = !available;
-  el.simpleEnter.title = available ? "Show only the current trust code" : "Create or unlock a trust channel first";
+  el.simpleEnter.title = available ? "Show only the current circle signal" : "Create or unlock a trust channel first";
   const visible = simpleModeRequested && available;
   el.simpleMode.hidden = !visible;
   document.body.classList.toggle("simple-mode-active", visible);
@@ -459,7 +459,7 @@ function renderSimpleWorkspace(entry = active()) {
   el.simpleRemaining.hidden = entry.scheme !== "proof";
 
   if (entry.scheme === "mutual") {
-    el.simplePrompt.textContent = "Ask them to read their trust code aloud. Make sure it matches below. Don’t tell them your code.";
+    el.simplePrompt.textContent = "Ask them to read their circle signal aloud. Make sure it matches below. Don’t tell them your code.";
   } else if (entry.role === "prove") {
     el.simplePrompt.textContent = `Read this phrase aloud to ${entry.name}`;
     el.simpleRemaining.textContent = `${entry.remaining} phrases remaining`;
@@ -828,7 +828,7 @@ function clearChangePasswordForm() {
     ? canOfferDevice
       ? "Keep device unlock enabled. You will confirm with the device while the vault keys are refreshed."
       : "Device unlock is configured but unavailable in this browser. Turn it off to continue with password-only access."
-    : "Use a passkey with Face ID, fingerprint, or your device passcode. TrustCodes will generate the separate recovery code.";
+    : "Use a passkey with Face ID, fingerprint, or your device passcode. CircleSignal will generate the separate recovery code.";
   renderPasswordStrength(el.newVaultPassword, el.changePasswordStrength);
   setChangeRecoveryInputMode();
 }
@@ -986,8 +986,8 @@ el.driveConnect.addEventListener("click", async () => {
     updateDriveBackupUI(files.length === 1
       ? driveFileStatus(files[0])
       : files.length > 1
-        ? "Connected, but multiple TrustCodes backups were found. Backup and restore are blocked until duplicates are removed."
-        : "Connected. No encrypted TrustCodes backup exists yet.");
+        ? "Connected, but multiple CircleSignal backups were found. Backup and restore are blocked until duplicates are removed."
+        : "Connected. No encrypted CircleSignal backup exists yet.");
   } catch (error) {
     updateDriveBackupUI(error.message);
   } finally {
@@ -1286,7 +1286,7 @@ $("#import-channel").addEventListener("click", async () => {
   clearError();
   try {
     const setupCode = el.importCode.value.trim();
-    if (!isProtectedSetupCode(setupCode)) throw new Error("Enter an authenticated TrustCodes setup code beginning with TC2-.");
+    if (!isProtectedSetupCode(setupCode)) throw new Error("Enter an authenticated CircleSignal setup code beginning with CS2-.");
     const entry = await decodeProtectedSetupCode(setupCode, el.importSetupPassphrase.value);
     if (operationWasLocked(operationEpoch)) return;
     entry.persisted = el.saveImport.checked && Boolean(vaultKey);
@@ -1372,7 +1372,7 @@ el.select.addEventListener("change", () => { clearActiveContext(); activeId = el
 $("#copy-code").addEventListener("click", () => {
   const entry = active();
   const format = entry?.scheme === "proof" ? "words" : entry?.format;
-  copyText(normalizeCode(el.generated.textContent, format), "Trust code copied");
+  copyText(normalizeCode(el.generated.textContent, format), "CircleSignal copied");
 });
 
 el.next.addEventListener("click", async () => {
@@ -1452,11 +1452,11 @@ el.recoveryCodeForm.addEventListener("submit", (event) => {
 });
 el.downloadRecoveryCode.addEventListener("click", async () => {
   if (!recoveryCode) return;
-  const content = `TrustCodes recovery code\n\n${recoveryCode}\n\nCreated: ${new Date().toISOString()}\n\nKeep this file private. This code can unlock your encrypted TrustCodes vault.\n`;
+  const content = `CircleSignal recovery code\n\n${recoveryCode}\n\nCreated: ${new Date().toISOString()}\n\nKeep this file private. This code can unlock your encrypted CircleSignal vault.\n`;
   const url = URL.createObjectURL(new Blob([content], { type: "text/plain;charset=utf-8" }));
   const link = document.createElement("a");
   link.href = url;
-  link.download = `trustcodes-recovery-code-${new Date().toISOString().slice(0, 10)}.txt`;
+  link.download = `circlesignal-recovery-code-${new Date().toISOString().slice(0, 10)}.txt`;
   document.body.append(link);
   link.click();
   link.remove();

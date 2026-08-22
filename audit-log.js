@@ -1,6 +1,6 @@
 export const MAX_AUDIT_LOG_ENTRIES = 100;
-export const PENDING_AUDIT_STORAGE_KEY = "trust-codes-pending-audit-log";
-export const UNLOCK_FAILURE_STORAGE_KEY = "trust-codes-vault-unlock-failures";
+export const PENDING_AUDIT_STORAGE_KEY = "circle-signal-pending-audit-log";
+export const UNLOCK_FAILURE_STORAGE_KEY = "circle-signal-vault-unlock-failures";
 export const UNLOCK_FAILURE_AUDIT_THRESHOLD = 5;
 
 export const AUDIT_ACTIONS = Object.freeze({
@@ -10,7 +10,7 @@ export const AUDIT_ACTIONS = Object.freeze({
   GOOD_RECOVERY_PASSWORD_ACCEPTED: "good_recovery_password_accepted",
   GOOGLE_DRIVE_BACKUP_COMPLETED: "google_drive_backup_completed",
   GOOGLE_DRIVE_RESTORE_COMPLETED: "google_drive_restore_completed",
-  LOW_STRENGTH_CODE_CREATED: "low_strength_trust_code_created",
+  LOW_STRENGTH_CODE_CREATED: "low_strength_circle_signal_created",
   RECOVERY_CODE_DOWNLOADED: "recovery_code_downloaded",
   REPEATED_VAULT_UNLOCK_FAILURES: "repeated_vault_unlock_failures",
   VAULT_RECOVERY_CHANGED: "vault_recovery_changed",
@@ -26,7 +26,7 @@ export const AUDIT_ACTION_LABELS = Object.freeze({
   [AUDIT_ACTIONS.GOOD_RECOVERY_PASSWORD_ACCEPTED]: "Good recovery password accepted",
   [AUDIT_ACTIONS.GOOGLE_DRIVE_BACKUP_COMPLETED]: "Google Drive backup completed",
   [AUDIT_ACTIONS.GOOGLE_DRIVE_RESTORE_COMPLETED]: "Google Drive restore completed",
-  [AUDIT_ACTIONS.LOW_STRENGTH_CODE_CREATED]: "Below-Good TrustCode created",
+  [AUDIT_ACTIONS.LOW_STRENGTH_CODE_CREATED]: "Below-Good CircleSignal created",
   [AUDIT_ACTIONS.RECOVERY_CODE_DOWNLOADED]: "Recovery code downloaded",
   [AUDIT_ACTIONS.REPEATED_VAULT_UNLOCK_FAILURES]: "Five consecutive vault unlock failures reached",
   [AUDIT_ACTIONS.VAULT_RECOVERY_CHANGED]: "Vault recovery changed",
@@ -78,13 +78,17 @@ export function readPendingAuditLog(storage = globalThis.localStorage) {
 
 export function writePendingAuditLog(auditLog, storage = globalThis.localStorage) {
   const validated = validateAuditLog(auditLog);
-  try { storage?.setItem(PENDING_AUDIT_STORAGE_KEY, JSON.stringify(validated)); }
+  try {
+    storage?.setItem(PENDING_AUDIT_STORAGE_KEY, JSON.stringify(validated));
+  }
   catch { /* The event remains unavailable until an unlocked vault can store it. */ }
   return validated;
 }
 
 export function clearPendingAuditLog(storage = globalThis.localStorage) {
-  try { storage?.removeItem(PENDING_AUDIT_STORAGE_KEY); }
+  try {
+    storage?.removeItem(PENDING_AUDIT_STORAGE_KEY);
+  }
   catch { /* A stale validated pending entry may be retried on a later unlock. */ }
 }
 
@@ -100,6 +104,8 @@ export function noteVaultUnlockFailure(storage = globalThis.localStorage) {
 }
 
 export function clearVaultUnlockFailures(storage = globalThis.localStorage) {
-  try { storage?.removeItem(UNLOCK_FAILURE_STORAGE_KEY); }
+  try {
+    storage?.removeItem(UNLOCK_FAILURE_STORAGE_KEY);
+  }
   catch { /* A stale count may remain if browser storage is unavailable. */ }
 }

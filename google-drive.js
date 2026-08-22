@@ -1,7 +1,7 @@
 export const DRIVE_APPDATA_SCOPE = "https://www.googleapis.com/auth/drive.appdata";
-export const DRIVE_BACKUP_FILE_NAME = "trustcodes-encrypted-vault-backup.json";
-export const DRIVE_BACKUP_MIME_TYPE = "application/vnd.trustcodes.encrypted-vault-backup+json";
-export const DRIVE_BACKUP_FORMAT = "trustcodes-encrypted-vault-backup";
+export const DRIVE_BACKUP_FILE_NAME = "circlesignal-encrypted-vault-backup.json";
+export const DRIVE_BACKUP_MIME_TYPE = "application/vnd.circlesignal.encrypted-vault-backup+json";
+export const DRIVE_BACKUP_FORMAT = "circlesignal-encrypted-vault-backup";
 const DRIVE_FILES_URL = "https://www.googleapis.com/drive/v3/files";
 const DRIVE_UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3/files";
 const MAX_BACKUP_BYTES = 18 * 1024 * 1024;
@@ -26,7 +26,7 @@ export function parseVaultBackupEnvelope(value, validateVault) {
     || value.format !== DRIVE_BACKUP_FORMAT || value.version !== 1
     || typeof lastBackedUpAt !== "string" || !Number.isFinite(Date.parse(lastBackedUpAt))
     || typeof value.sourceOrigin !== "string" || value.sourceOrigin.length > 2048) {
-    throw new Error("The Google Drive file is not a supported TrustCodes backup.");
+    throw new Error("The Google Drive file is not a supported CircleSignal backup.");
   }
   return {
     format: DRIVE_BACKUP_FORMAT,
@@ -41,7 +41,7 @@ export function loadGoogleIdentityServices(documentRef = globalThis.document) {
   if (globalThis.google?.accounts?.oauth2) return Promise.resolve(globalThis.google);
   if (!documentRef) return Promise.reject(new Error("Google sign-in is unavailable in this browser."));
   return new Promise((resolve, reject) => {
-    const existing = documentRef.querySelector('script[data-trustcodes-google-identity]');
+    const existing = documentRef.querySelector('script[data-circlesignal-google-identity]');
     const script = existing || documentRef.createElement("script");
     const ready = () => globalThis.google?.accounts?.oauth2
       ? resolve(globalThis.google)
@@ -52,7 +52,7 @@ export function loadGoogleIdentityServices(documentRef = globalThis.document) {
       script.src = "https://accounts.google.com/gsi/client";
       script.async = true;
       script.defer = true;
-      script.dataset.trustcodesGoogleIdentity = "true";
+      script.dataset.circlesignalGoogleIdentity = "true";
       documentRef.head.append(script);
     }
   });
@@ -137,7 +137,7 @@ export class GoogleDriveVaultBackup {
     const contents = JSON.stringify(envelope);
     if (new TextEncoder().encode(contents).byteLength > MAX_BACKUP_BYTES) throw new Error("The encrypted vault is too large for this backup format.");
     const files = await this.listBackups();
-    if (files.length > 1) throw new Error("Multiple TrustCodes backups were found. No file was overwritten; remove duplicates in Google Drive before retrying.");
+    if (files.length > 1) throw new Error("Multiple CircleSignal backups were found. No file was overwritten; remove duplicates in Google Drive before retrying.");
     if (files.length === 1) {
       const response = await this.authorizedFetch(`${DRIVE_UPLOAD_URL}/${encodeURIComponent(files[0].id)}?uploadType=media&fields=id,name,modifiedTime,version,size`, {
         method: "PATCH",
@@ -146,7 +146,7 @@ export class GoogleDriveVaultBackup {
       });
       return response.json();
     }
-    const boundary = `trustcodes_${crypto.randomUUID?.() || Date.now()}`;
+    const boundary = `circlesignal_${crypto.randomUUID?.() || Date.now()}`;
     const metadata = JSON.stringify({ name: DRIVE_BACKUP_FILE_NAME, parents: ["appDataFolder"], mimeType: DRIVE_BACKUP_MIME_TYPE });
     const body = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n--${boundary}\r\nContent-Type: ${DRIVE_BACKUP_MIME_TYPE}\r\n\r\n${contents}\r\n--${boundary}--`;
     const response = await this.authorizedFetch(`${DRIVE_UPLOAD_URL}?uploadType=multipart&fields=id,name,modifiedTime,version,size`, {
@@ -159,8 +159,8 @@ export class GoogleDriveVaultBackup {
 
   async restore(validateVault) {
     const files = await this.listBackups();
-    if (!files.length) throw new Error("No TrustCodes backup was found in this Google Drive account.");
-    if (files.length > 1) throw new Error("Multiple TrustCodes backups were found. Restore stopped to avoid choosing the wrong file.");
+    if (!files.length) throw new Error("No CircleSignal backup was found in this Google Drive account.");
+    if (files.length > 1) throw new Error("Multiple CircleSignal backups were found. Restore stopped to avoid choosing the wrong file.");
     const response = await this.authorizedFetch(`${DRIVE_FILES_URL}/${encodeURIComponent(files[0].id)}?alt=media`);
     const text = await response.text();
     if (new TextEncoder().encode(text).byteLength > MAX_BACKUP_BYTES) throw new Error("The Google Drive backup is too large to restore safely.");

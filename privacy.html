@@ -6,9 +6,9 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'none'; object-src 'none'; script-src 'self' https://accounts.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com; frame-src https://accounts.google.com; media-src 'self' blob:; worker-src 'none'; manifest-src 'none'; form-action 'self'; upgrade-insecure-requests">
   <meta name="referrer" content="no-referrer">
   <meta name="theme-color" content="#f5f1e8">
-  <meta name="description" content="Privacy policy for TrustCodes.">
-  <title>Privacy Policy — TrustCodes</title>
-  <link rel="icon" type="image/png" sizes="64x64" href="assets/trust-codes-favicon.png">
+  <meta name="description" content="Privacy policy for CircleSignal.">
+  <title>Privacy Policy — CircleSignal</title>
+  <link rel="icon" type="image/png" sizes="64x64" href="assets/circle-signal-favicon.png">
   <style>
     :root{color-scheme:light;--ink:#192d2a;--muted:#667570;--paper:#f5f1e8;--card:#fffdf8;--line:#d8ded8;--green:#194f47;--coral:#b95342;font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
     *{box-sizing:border-box}
@@ -38,9 +38,9 @@
 </head>
 <body>
   <header>
-    <a class="brand" href="./" aria-label="TrustCodes home">
-      <img src="assets/trust-codes-icon-transparent.png" width="192" height="192" alt="" aria-hidden="true">
-      <span>TrustCodes</span>
+    <a class="brand" href="./" aria-label="CircleSignal home">
+      <img src="assets/circle-signal-icon-transparent.png" width="192" height="192" alt="" aria-hidden="true">
+      <span>CircleSignal</span>
     </a>
   </header>
 
@@ -50,14 +50,14 @@
     <p class="updated">Effective and last updated: August 20, 2026</p>
 
     <div class="summary">
-      <p><strong>In short:</strong> TrustCodes has no application account, advertising system, analytics service, or developer-operated backend. Cryptographic operations run in your browser. Unless you deliberately share a setup code, follow an external link, or use the optional Google Drive backup, the information you enter stays on your device.</p>
+      <p><strong>In short:</strong> CircleSignal has no application account, advertising system, analytics service, or developer-operated backend. Cryptographic operations run in your browser. Unless you deliberately share a setup code, follow an external link, or use the optional Google Drive backup, the information you enter stays on your device.</p>
     </div>
 
     <h2>1. Scope and operator</h2>
-    <p>This policy describes how the TrustCodes web application is operated by Nick Oddson (the “developer,” “TrustCodes,” “we,” “us,” or “our”). It applies to the application hosted at <code>https://noddson.github.io/trustcodes/</code>. Third-party websites, browser features, operating systems, passkey providers, and services linked from the application have their own privacy practices.</p>
+    <p>This policy describes how the CircleSignal web application is operated by Nick Oddson (the “developer,” “CircleSignal,” “we,” “us,” or “our”). It applies to the application hosted at <code>https://noddson.github.io/CircleSignal/</code>. Third-party websites, browser features, operating systems, passkey providers, and services linked from the application have their own privacy practices.</p>
 
     <h2>2. Information processed on your device</h2>
-    <p>Depending on how you use TrustCodes, the application may process the following information locally in your browser:</p>
+    <p>Depending on how you use CircleSignal, the application may process the following information locally in your browser:</p>
     <ul>
       <li>channel names and optional contact photos you select;</li>
       <li>cryptographic secrets, hash-chain seeds or anchors, rotating codes, proof phrases, counters, setup codes, and related configuration;</li>
@@ -66,7 +66,7 @@
       <li>camera frames used to scan a QR setup code; and</li>
       <li>the non-sensitive preference indicating whether Simple mode is enabled.</li>
     </ul>
-    <p>Camera frames are processed in page memory and are not intentionally saved or uploaded. Selected contact photos are resized locally. Context values, vault recovery secrets, unwrapped keys, and decrypted channel material may exist temporarily in browser memory while needed for the requested operation, but TrustCodes does not intentionally persist them in plaintext. Passkey-enabled vaults display a device-generated recovery code once and can download it as an unencrypted local text file at your request. The browser and operating system control the downloaded file after it is saved.</p>
+    <p>Camera frames are processed in page memory and are not intentionally saved or uploaded. Selected contact photos are resized locally. Context values, vault recovery secrets, unwrapped keys, and decrypted channel material may exist temporarily in browser memory while needed for the requested operation, but CircleSignal does not intentionally persist them in plaintext. Passkey-enabled vaults display a device-generated recovery code once and can download it as an unencrypted local text file at your request. The browser and operating system control the downloaded file after it is saved.</p>
     <p>The encrypted vault contains a local audit history capped at 100 entries. Each entry contains only an ISO date and an allowlisted action describing a security-relevant choice or lifecycle event, such as accepting a warned recovery password, creating a below-Good code format, disabling automatic locking, changing vault recovery or device unlock, downloading a recovery code, completing a Google Drive backup or restore, or reaching five consecutive failed recovery-secret unlocks. It does not include the chosen password, code, channel name, contact, Google account or file identifier, or free-form text. Ordinary unlocks, passkey cancellations, and failed or cancelled cloud operations are not recorded. If the vault is unavailable for encryption, a validated date/action pair may wait temporarily in LocalStorage until the next successful vault creation or unlock save, after which the pending copy is removed. A separate capped LocalStorage counter tracks consecutive recovery-secret unlock failures and is cleared after a successful password, recovery-code, or device unlock. This history is not tamper-proof and follows the encrypted vault when it is backed up or restored.</p>
 
     <h2>3. Local browser storage</h2>
@@ -75,25 +75,25 @@
     <p>You can remove the encrypted vault using the application’s two-step <strong>Purge vault</strong> control or by clearing site data in your browser. Clearing browser data, changing browsers, or changing devices may also remove it. A passkey may remain listed by your operating system or passkey provider after the local vault is purged, but it cannot unlock a vault record that no longer exists.</p>
 
     <h2>4. Passkeys and device unlock</h2>
-    <p>On supported devices, TrustCodes can use WebAuthn and its PRF extension to wrap the vault key after your browser or operating system performs user verification. TrustCodes does not receive or store your fingerprint, face scan, device passcode, or other biometric template. Your operating system, browser, authenticator, and passkey provider control their own processing and any passkey synchronization.</p>
+    <p>On supported devices, CircleSignal can use WebAuthn and its PRF extension to wrap the vault key after your browser or operating system performs user verification. CircleSignal does not receive or store your fingerprint, face scan, device passcode, or other biometric template. Your operating system, browser, authenticator, and passkey provider control their own processing and any passkey synchronization.</p>
 
     <h2>5. Information sent off your device</h2>
     <p><strong>Application hosting.</strong> The application is delivered through GitHub Pages. When your browser requests the site, GitHub may process ordinary web-request information such as IP address, device or browser information, requested URLs, and timestamps under the <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement" rel="noopener noreferrer">GitHub Privacy Statement</a>. The developer may receive limited aggregate traffic information made available by GitHub.</p>
     <p><strong>Information you deliberately share.</strong> A setup code or QR code is created locally. It leaves your device only when you choose to copy, display, transmit, or otherwise share it. The recipient and any communication service you use will process that information under their own practices.</p>
-    <p><strong>External links.</strong> TrustCodes links to GitHub commit pages, Wikipedia, and PayPal. Those services receive information only when you choose to follow their links, subject to their own privacy policies. An optional contribution is handled by PayPal; TrustCodes does not receive your payment credentials.</p>
-    <p>TrustCodes does not currently use application analytics, advertising trackers, marketing pixels, or developer-set cookies. It does not sell personal information or share it for cross-context behavioral advertising.</p>
+    <p><strong>External links.</strong> CircleSignal links to GitHub commit pages, Wikipedia, and PayPal. Those services receive information only when you choose to follow their links, subject to their own privacy policies. An optional contribution is handled by PayPal; CircleSignal does not receive your payment credentials.</p>
+    <p>CircleSignal does not currently use application analytics, advertising trackers, marketing pixels, or developer-set cookies. It does not sell personal information or share it for cross-context behavioral advertising.</p>
 
     <h2>6. Optional Google Drive backup</h2>
-    <p>If you choose to connect Google Drive from Vault options, TrustCodes requests only the <code>drive.appdata</code> permission to create, read, and update its own hidden application-data file. It does not request access to your ordinary Google Drive files. Authorization and backup actions are initiated by you; backup is not automatic.</p>
-    <p>The backup contains the encrypted vault record and associated cryptographic metadata, such as its format version, salts, initialization vectors, wrapped keys, and ciphertext. TrustCodes does not intentionally upload the vault recovery secret, context values, unwrapped vault key, decrypted channel contents, or plaintext contact photos. Google may process account, authorization, file metadata, network, and service-usage information under Google’s own policies.</p>
-    <p>Google Drive access will be optional and initiated by you. TrustCodes will use Google API information only to provide the visible encrypted-backup and restore functions you request. TrustCodes’ use and transfer of information received from Google APIs will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy" rel="noopener noreferrer">Google API Services User Data Policy</a>, including its Limited Use requirements. Google API information will not be sold, used for advertising, used to determine creditworthiness, or used to train a general-purpose artificial-intelligence model.</p>
+    <p>If you choose to connect Google Drive from Vault options, CircleSignal requests only the <code>drive.appdata</code> permission to create, read, and update its own hidden application-data file. It does not request access to your ordinary Google Drive files. Authorization and backup actions are initiated by you; backup is not automatic.</p>
+    <p>The backup contains the encrypted vault record and associated cryptographic metadata, such as its format version, salts, initialization vectors, wrapped keys, and ciphertext. CircleSignal does not intentionally upload the vault recovery secret, context values, unwrapped vault key, decrypted channel contents, or plaintext contact photos. Google may process account, authorization, file metadata, network, and service-usage information under Google’s own policies.</p>
+    <p>Google Drive access will be optional and initiated by you. CircleSignal will use Google API information only to provide the visible encrypted-backup and restore functions you request. CircleSignal’s use and transfer of information received from Google APIs will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy" rel="noopener noreferrer">Google API Services User Data Policy</a>, including its Limited Use requirements. Google API information will not be sold, used for advertising, used to determine creditworthiness, or used to train a general-purpose artificial-intelligence model.</p>
 
     <h2>7. Retention and deletion</h2>
     <ul>
       <li><strong>In-memory information</strong> normally remains until it is cleared, the vault is locked, the page is reloaded or closed, or the browser runtime releases it.</li>
       <li><strong>Local encrypted-vault information</strong> remains until you purge the vault or clear the application’s browser storage.</li>
       <li><strong>Local preferences</strong> remain until you change them or clear site storage.</li>
-      <li><strong>Google Drive backups</strong> remain in your Google account until you remove the app’s hidden data through Google Drive account controls. Disconnecting TrustCodes revokes its token in the current tab but does not delete an existing backup.</li>
+      <li><strong>Google Drive backups</strong> remain in your Google account until you remove the app’s hidden data through Google Drive account controls. Disconnecting CircleSignal revokes its token in the current tab but does not delete an existing backup.</li>
       <li><strong>Hosting and third-party records</strong> are retained by the relevant provider under its own policy.</li>
     </ul>
 
@@ -101,26 +101,26 @@
     <p>The developer does not intentionally receive your vault contents, channel secrets, contexts, contact photos, codes, proof phrases, or vault recovery secret. Information may be processed by GitHub as the hosting provider, by Google only if you choose the optional Google Drive integration, by PayPal if you choose to contribute, or by another service you independently use to transmit a setup code. Information may also be disclosed if legally required, but the developer cannot disclose application data that the developer does not possess.</p>
 
     <h2>9. Security and important limitations</h2>
-    <p>TrustCodes uses browser cryptography and encrypted local storage, but no system can guarantee absolute security. Encryption at rest does not protect an unlocked session. A compromised application update, webpage, browser extension, browser profile, operating system, device, authenticator, or cloud account could expose information. JavaScript cannot guarantee immediate erasure of values from memory because memory management is controlled by the browser runtime.</p>
+    <p>CircleSignal uses browser cryptography and encrypted local storage, but no system can guarantee absolute security. Encryption at rest does not protect an unlocked session. A compromised application update, webpage, browser extension, browser profile, operating system, device, authenticator, or cloud account could expose information. JavaScript cannot guarantee immediate erasure of values from memory because memory management is controlled by the browser runtime.</p>
     <p>You are responsible for safeguarding setup codes, context secrets, vault recovery passwords or codes, downloaded recovery files, devices, browser profiles, passkeys, backups, and any communication method used to transfer information.</p>
 
     <h2>10. Your choices and privacy rights</h2>
     <p>You can choose not to create a vault, not to save a channel, not to provide a contact photo or context, not to enable camera access or device unlock, and not to connect Google Drive. Browser and operating-system settings let you revoke camera or passkey access and clear local storage. Google account controls let you revoke Drive access and remove hidden application data. Where applicable law grants access, correction, deletion, restriction, objection, portability, or appeal rights, you may exercise them with the party that holds the relevant information. Most application content is held only under your control on your device.</p>
 
     <h2>11. Children</h2>
-    <p>TrustCodes is not directed to children under 13, and the developer does not knowingly collect personal information from children through an application backend. A parent or guardian who believes a child has provided information directly to the developer may use the contact method below.</p>
+    <p>CircleSignal is not directed to children under 13, and the developer does not knowingly collect personal information from children through an application backend. A parent or guardian who believes a child has provided information directly to the developer may use the contact method below.</p>
 
     <h2>12. International processing</h2>
     <p>GitHub, Google, PayPal, passkey providers, and other services you choose may process information in countries other than your own. Their privacy policies describe their processing locations and transfer safeguards.</p>
 
     <h2>13. Changes to this policy</h2>
-    <p>This policy may be updated when TrustCodes changes or when legal or service-provider requirements change. The effective date at the top will be revised. Material changes affecting Google API information will be disclosed before that information is used in a new way, and additional consent will be requested where required.</p>
+    <p>This policy may be updated when CircleSignal changes or when legal or service-provider requirements change. The effective date at the top will be revised. Material changes affecting Google API information will be disclosed before that information is used in a new way, and additional consent will be requested where required.</p>
 
     <h2>14. Contact</h2>
-    <p>Privacy questions may be directed to Nick Oddson through the <a href="https://github.com/noddson/trustcodes" rel="noopener noreferrer">TrustCodes GitHub repository</a>. Do not include vault recovery secrets, context secrets, setup codes, contact photos, or other sensitive information in a public GitHub issue.</p>
+    <p>Privacy questions may be directed to Nick Oddson through the <a href="https://github.com/noddson/CircleSignal" rel="noopener noreferrer">CircleSignal GitHub repository</a>. Do not include vault recovery secrets, context secrets, setup codes, contact photos, or other sensitive information in a public GitHub issue.</p>
 
     <div class="notice">
-      <p>This policy describes the application’s intended data practices. It does not change the security limitation that a matching Trust Code cannot guarantee another person’s identity, authority, honesty, intent, or the safety of a request.</p>
+      <p>This policy describes the application’s intended data practices. It does not change the security limitation that a matching CircleSignal cannot guarantee another person’s identity, authority, honesty, intent, or the safety of a request.</p>
     </div>
   </main>
 </body>

@@ -33,7 +33,7 @@ function generateVersionMetadata() {
   const shortSha = fullSha.slice(0, 7);
   const remoteUrl = tryRun("git config --get remote.origin.url");
   const defaultOwner = "noddson";
-  const defaultRepo = "TrustCodes";
+  const defaultRepo = "CircleSignal";
   const [, owner = defaultOwner, repo = defaultRepo] = remoteUrl.match(/github\.com[:/]([^/]+)\/(.+?)(?:\.git)?$/) || [];
   const dirty = isDirty();
   const displayVersion = `${year}.${month}.${shortSha}${dirty ? ".d" : ""}`;

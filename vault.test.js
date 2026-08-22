@@ -47,7 +47,7 @@ test("legacy encrypted bare-entry arrays open with an empty audit log", async ()
   const entries = [{ id: "legacy-array", secret: "still-readable" }];
   const key = await deriveVaultKey("a long test passphrase", salt, 1_000);
   const plaintext = new TextEncoder().encode(JSON.stringify(entries));
-  const additionalData = new TextEncoder().encode("TrustCodesVault/v1");
+  const additionalData = new TextEncoder().encode("CircleSignalVault/v1");
   const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData }, key, plaintext);
   const record = { iv: encodeBase64Url(iv), ciphertext: encodeBase64Url(new Uint8Array(ciphertext)) };
   assert.deepEqual(await decryptVaultPayload(record, key), { entries, auditLog: [] });
