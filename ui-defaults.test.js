@@ -9,6 +9,14 @@ test("new mutual channels default to time-based six-word codes", () => {
   assert.match(html, /<select id="code-length" data-default-length="6"><\/select>/);
 });
 
+test("simple mode keeps the shared responsive header width", () => {
+  const html = readFileSync("index.html", "utf8");
+  const styles = readFileSync("styles.css", "utf8");
+  assert.match(html, /<header class="site-header simple-header">/);
+  assert.match(styles, /\.simple-header\{width:100%;max-width:1180px;/);
+  assert.doesNotMatch(styles, /\.simple-header\.site-header\{[^}]*width:auto/);
+});
+
 test("the version footer uses a mobile-responsive disclosure", () => {
   const html = readFileSync("index.html", "utf8");
   const app = readFileSync("app.js", "utf8");
