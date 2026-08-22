@@ -68,7 +68,7 @@ const el = {
   lockTimeout: $("#lock-timeout"), lockTimeoutCopy: $("#lock-timeout-copy"), disableAutoLockDialog: $("#disable-auto-lock-dialog"), disableAutoLockForm: $("#disable-auto-lock-form"), disableAutoLockConfirm: $("#disable-auto-lock-confirm"), disableAutoLockSubmit: $("#disable-auto-lock-submit"),
   localVaultSettings: $("#local-vault-settings"), localVaultDangerSettings: $("#local-vault-danger-settings"),
   driveStatus: $("#drive-backup-status"), driveConnect: $("#drive-connect"), driveBackup: $("#drive-backup"),
-  driveRestoreOpen: $("#drive-restore-open"), driveDisconnect: $("#drive-disconnect"),
+  driveRestoreOpen: $("#drive-restore-open"),
   driveRestoreDialog: $("#drive-restore-dialog"), driveRestoreForm: $("#drive-restore-form"), driveRestoreCopy: $("#drive-restore-copy"),
   driveRestoreConfirmation: $("#drive-restore-confirmation"), driveRestoreSubmit: $("#drive-restore-submit"), driveRestoreError: $("#drive-restore-error"),
   changePasswordDialog: $("#change-password-dialog"), changePasswordForm: $("#change-password-form"), currentVaultPassword: $("#current-vault-password"),
@@ -100,6 +100,7 @@ let simpleModeRequested = readSimpleModePreference();
 let simpleRenderedId = null;
 const googleDriveBackup = new GoogleDriveVaultBackup({ clientId: GOOGLE_DRIVE_CLIENT_ID });
 let driveStatusMessage = "";
+let driveBackupCount = null;
 let pendingDriveRestore = null;
 let recoveryCode = null;
 let lockTimeoutMinutes = readLockTimeout();
@@ -696,6 +697,7 @@ function secureLock(message = "Encrypted vault securely locked") {
   el.scannerCanvas.height = 0;
   googleDriveBackup.disconnect();
   driveStatusMessage = "";
+  driveBackupCount = null;
   document.querySelectorAll("dialog[open]").forEach((dialog) => dialog.close());
   pendingLocal = null;
   pendingPeer = null;
@@ -788,8 +790,8 @@ function updateDriveBackupUI(message = driveStatusMessage) {
   el.driveConnect.disabled = !configured;
   el.driveBackup.hidden = !connected;
   el.driveRestoreOpen.hidden = !connected;
-  el.driveDisconnect.hidden = !connected;
-  el.driveBackup.disabled = !vaultPresent;
+  el.driveBackup.disabled = !vaultPresent || driveBackupCount > 1;
+  el.driveRestoreOpen.disabled = driveBackupCount !== 1;
   el.driveStatus.textContent = message || (!configured
     ? "Google Drive backup is not configured for this deployment."
     : connected
@@ -983,6 +985,7 @@ el.driveConnect.addEventListener("click", async () => {
   try {
     await googleDriveBackup.connect();
     const files = await googleDriveBackup.listBackups();
+    driveBackupCount = files.length;
     updateDriveBackupUI(files.length === 1
       ? driveFileStatus(files[0])
       : files.length > 1
@@ -995,29 +998,26 @@ el.driveConnect.addEventListener("click", async () => {
     updateDriveBackupUI();
   }
 });
-el.driveDisconnect.addEventListener("click", () => {
-  googleDriveBackup.disconnect();
-  updateDriveBackupUI("Disconnected from Google Drive in this tab.");
-});
 el.driveBackup.addEventListener("click", async () => {
   if (!vaultPresent) return updateDriveBackupUI("Create or restore an encrypted vault before backing up.");
-  setDriveBusy(el.driveBackup, true, "Backing up…", "Back up now");
+  setDriveBusy(el.driveBackup, true, "Backing up…", "Backup Vault now");
   try {
     const record = validateVaultBackupRecord(await getVaultRecord());
     const file = await googleDriveBackup.backup(createVaultBackupEnvelope(record));
+    driveBackupCount = 1;
     updateDriveBackupUI(driveFileStatus(file));
     await recordAuditAction(AUDIT_ACTIONS.GOOGLE_DRIVE_BACKUP_COMPLETED);
     showToast("Encrypted vault backed up to Google Drive");
   } catch (error) {
     updateDriveBackupUI(error.message);
   } finally {
-    setDriveBusy(el.driveBackup, false, "Backing up…", "Back up now");
+    setDriveBusy(el.driveBackup, false, "Backing up…", "Backup Vault now");
     updateDriveBackupUI();
   }
 });
 el.driveRestoreOpen.addEventListener("click", async () => {
   const operationEpoch = securityEpoch;
-  setDriveBusy(el.driveRestoreOpen, true, "Checking…", "Restore…");
+  setDriveBusy(el.driveRestoreOpen, true, "Checking…", "Restore Vault from backup");
   try {
     const restoredBackup = await googleDriveBackup.restore(validateVaultBackupRecord);
     if (operationWasLocked(operationEpoch)) return;
@@ -1032,7 +1032,7 @@ el.driveRestoreOpen.addEventListener("click", async () => {
   } catch (error) {
     updateDriveBackupUI(error.message);
   } finally {
-    setDriveBusy(el.driveRestoreOpen, false, "Checking…", "Restore…");
+    setDriveBusy(el.driveRestoreOpen, false, "Checking…", "Restore Vault from backup");
     updateDriveBackupUI();
   }
 });

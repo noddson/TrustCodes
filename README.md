@@ -75,7 +75,7 @@ Keep any setup backup and its one-time passphrase safe and separate. Also protec
 
 ## Google Drive encrypted backup
 
-The vault gear contains manual **Back up now** and **Restore** controls using Google Drive's hidden `appDataFolder`. CircleSignal requests only the `https://www.googleapis.com/auth/drive.appdata` scope. The uploaded JSON envelope contains the already-encrypted vault record, an explicit `lastBackedUpAt` timestamp, and cryptographic metadata; it does not contain the recovery secret, an unwrapped vault key, plaintext channel contents, context values, or plaintext contact photos.
+The vault gear contains manual **Backup Vault now** and **Restore Vault from backup** controls using Google Drive's hidden `appDataFolder`. CircleSignal requests only the `https://www.googleapis.com/auth/drive.appdata` scope. The restore control is disabled unless exactly one backup is present. The uploaded JSON envelope contains the already-encrypted vault record, an explicit `lastBackedUpAt` timestamp, and cryptographic metadata; it does not contain the recovery secret, an unwrapped vault key, plaintext channel contents, context values, or plaintext contact photos.
 
 To enable the controls for a deployment:
 
@@ -84,7 +84,7 @@ To enable the controls for a deployment:
 3. Add `https://noddson.github.io` as an authorized JavaScript origin for GitHub Pages. Add `http://localhost:4173` for local development.
 4. Put the public client ID in `google-drive-config.js`. Do not add a client secret; browser applications cannot keep one confidential.
 
-Access tokens are held only in page memory and are revoked when **Disconnect** is pressed or the vault securely locks. Backups are never automatic. A backup updates the one known CircleSignal app-data file; duplicates stop the operation rather than allowing an ambiguous overwrite. Restore downloads and strictly validates the encrypted record before showing a destructive confirmation, then replaces—never merges—the local browser vault and requires the restored vault's recovery password, recovery code, or compatible device credential to unlock it.
+Access tokens are held only in page memory and are revoked when the vault securely locks. Backups are never automatic. A backup updates the one known CircleSignal app-data file; duplicates stop the operation rather than allowing an ambiguous overwrite. Restore downloads and strictly validates the encrypted record before showing a destructive confirmation, then replaces—never merges—the local browser vault and requires the restored vault's recovery password, recovery code, or compatible device credential to unlock it.
 
 ## Trust models
 
