@@ -16,7 +16,7 @@
   <script type="module" src="app.js"></script>
 </head>
 <body>
-  <section id="simple-mode" class="simple-mode" aria-label="Simple circle signal view" hidden>
+  <section id="simple-mode" class="simple-mode" aria-label="Simple code view" hidden>
     <header class="simple-header">
       <div class="simple-brand" aria-label="CircleSignal">
         <picture class="brand-mark-picture">
@@ -38,7 +38,7 @@
       </button>
       <input id="simple-photo-input" class="sr-only" type="file" accept="image/*">
       <h1 id="simple-person-name" class="simple-person-name">Private channel</h1>
-      <p id="simple-prompt" class="simple-prompt">Ask them to read their circle signal aloud. Make sure it matches below. Don’t tell them your code.</p>
+      <p id="simple-prompt" class="simple-prompt">Ask them to read their code aloud. Make sure it matches below. Don’t tell them your code.</p>
 
       <section id="simple-generate-card" class="simple-code-card">
         <div id="simple-generated-code" class="simple-generated-code" aria-live="polite">••• •••</div>
@@ -63,7 +63,7 @@
       </section>
     </main>
 
-    <nav class="simple-people" aria-label="Other circle signals">
+    <nav class="simple-people" aria-label="Other people">
       <div class="simple-people-title">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm8-1a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM2.5 19c.4-3.1 2.2-4.8 5.5-4.8s5.1 1.7 5.5 4.8M13 14.5c.7-.4 1.6-.6 2.8-.6 3.2 0 5 1.8 5.4 5.1"/></svg>
         Check a code for someone else
@@ -168,7 +168,7 @@
           <div class="setup-auth-box setup-passphrase-box"><div><strong>One-time setup passphrase</strong><code id="setup-passphrase"></code><p>Read or transcribe these eight words separately from the setup code. They are not saved and disappear when you leave this screen.</p></div></div>
           <div class="setup-auth-box setup-fingerprint-box"><div><strong>Setup fingerprint</strong><code id="setup-fingerprint"></code><p>After they enter the passphrase, compare this short code before they confirm the import.</p></div></div>
           <div id="setup-qr-panel" class="setup-qr-panel" hidden><canvas id="setup-qr" role="img" aria-label="QR code containing the encrypted setup code"></canvas><div><strong>Scan once on the other device</strong><p>This QR contains only the encrypted setup package. It never contains the one-time passphrase or context.</p><button id="hide-setup-qr" class="text-button" type="button">Hide QR code</button></div></div>
-          <div class="button-row share-actions"><button id="cancel-share" class="secondary-button" type="button">Start over</button><button id="finish-setup" class="primary-button" type="button">Continue to circle signals</button></div>
+          <div class="button-row share-actions"><button id="cancel-share" class="secondary-button" type="button">Start over</button><button id="finish-setup" class="primary-button" type="button">Continue to codes</button></div>
         </div>
         <div id="setup-error" class="notice error" role="alert" hidden></div>
       </section>

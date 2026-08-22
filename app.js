@@ -460,7 +460,7 @@ function renderSimpleWorkspace(entry = active()) {
   el.simpleRemaining.hidden = entry.scheme !== "proof";
 
   if (entry.scheme === "mutual") {
-    el.simplePrompt.textContent = "Ask them to read their circle signal aloud. Make sure it matches below. Don’t tell them your code.";
+    el.simplePrompt.textContent = "Ask them to read their code aloud. Make sure it matches below. Don’t tell them your code.";
   } else if (entry.role === "prove") {
     el.simplePrompt.textContent = `Read this phrase aloud to ${entry.name}`;
     el.simpleRemaining.textContent = `${entry.remaining} phrases remaining`;
