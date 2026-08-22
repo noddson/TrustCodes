@@ -274,11 +274,11 @@ function updateProofStrengthOptions() {
 }
 
 function updateStrengthOptions() {
-  const format = el.format.value, previous = Number(el.length.value);
+  const format = el.format.value, defaultLength = Number(el.length.dataset.defaultLength) || 6, previous = Number(el.length.value) || defaultLength;
   el.length.innerHTML = LENGTHS[format].map((length) => {
     return `<option value="${length}">${strengthOptionLabel(format, length)}</option>`;
   }).join("");
-  el.length.value = String(LENGTHS[format].includes(previous) ? previous : 6);
+  el.length.value = String(LENGTHS[format].includes(previous) ? previous : defaultLength);
   el.formatHelp.textContent = FORMAT_HELP[format];
   const length = Number(el.length.value);
   el.strengthRating.innerHTML = strengthRatingMarkup(format, length, false);
@@ -890,6 +890,19 @@ async function renderBuildVersion() {
   link.rel = "noopener noreferrer";
   link.title = version.fullSha;
   versionElement.replaceChildren(label, link);
+}
+
+function initializeResponsiveFooter() {
+  const footer = $("#app-footer-disclosure");
+  if (!footer) return;
+  const mobile = window.matchMedia("(max-width: 760px)");
+  const sync = () => { footer.open = !mobile.matches; };
+  sync();
+  footer.querySelector("summary")?.addEventListener("click", (event) => {
+    if (!mobile.matches && !event.target.closest?.("a")) event.preventDefault();
+  });
+  if (typeof mobile.addEventListener === "function") mobile.addEventListener("change", sync);
+  else mobile.addListener?.(sync);
 }
 
 async function applySelectedPhoto(input) {
@@ -1565,4 +1578,4 @@ document.addEventListener("visibilitychange", () => {
 window.addEventListener("pagehide", () => secureLock("Encrypted vault securely locked"));
 ["pointerdown", "keydown", "touchstart"].forEach((eventName) => document.addEventListener(eventName, noteActivity, { passive: true }));
 
-updateStrengthOptions(); updateProofStrengthOptions(); updateScheme(); updateLockTimeoutCopy(); renderWorkspace(); initializeVault(); renderBuildVersion(); tick(); setInterval(tick, 250);
+updateStrengthOptions(); updateProofStrengthOptions(); updateScheme(); updateLockTimeoutCopy(); renderWorkspace(); initializeVault(); initializeResponsiveFooter(); renderBuildVersion(); tick(); setInterval(tick, 250);

@@ -16,10 +16,6 @@
     flex: none;
   }
 
-  .simple-header {
-    grid-template-columns: 1fr auto 1fr;
-  }
-
   .simple-main {
     min-height: 0;
     overflow-y: auto;
